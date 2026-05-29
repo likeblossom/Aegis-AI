@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, governanceReports, useCases } from "@/db/schema";
 import {
+  GOVERNANCE_PROMPT_VERSION,
   generateAzureGovernanceReport,
+  getAzureGovernanceModel,
   isAzureGovernanceConfigured
 } from "@/server/governance/azureGovernanceReport";
 import { generateGovernanceReport } from "@/server/governance/generateGovernanceReport";
@@ -36,6 +38,8 @@ export async function POST(_request: Request, context: RouteContext) {
   let report = deterministicReport;
   let analysisMode: "azure" | "deterministic" = "deterministic";
   let fallbackReason: string | null = null;
+  let promptVersion = "deterministic-governance-v1.0";
+  let model: string | null = null;
 
   if (isAzureGovernanceConfigured()) {
     try {
@@ -44,11 +48,20 @@ export async function POST(_request: Request, context: RouteContext) {
         deterministicReport
       });
       analysisMode = "azure";
+      promptVersion = GOVERNANCE_PROMPT_VERSION;
+      model = getAzureGovernanceModel();
     } catch (error) {
       fallbackReason =
         error instanceof Error ? error.message : "Azure AI generation failed.";
     }
   }
+
+  const reportVersion =
+    db
+      .select()
+      .from(governanceReports)
+      .where(eq(governanceReports.useCaseId, proposal.id))
+      .all().length + 1;
 
   const created = db
     .insert(governanceReports)
@@ -58,7 +71,11 @@ export async function POST(_request: Request, context: RouteContext) {
       riskLevel: report.riskLevel,
       aiReadinessScore: report.aiReadinessScore,
       finalRecommendation: report.finalRecommendation,
-      confidenceLevel: report.confidenceLevel
+      confidenceLevel: report.confidenceLevel,
+      promptVersion,
+      generationProvider: analysisMode,
+      model,
+      reportVersion
     })
     .returning()
     .get();
@@ -69,10 +86,10 @@ export async function POST(_request: Request, context: RouteContext) {
       action: "REPORT_GENERATED",
       note:
         analysisMode === "azure"
-          ? `Azure AI governance report generated with ${report.riskLevel} risk.`
+          ? `Azure AI governance report v${reportVersion} generated with ${report.riskLevel} risk.`
           : fallbackReason
-            ? `Deterministic fallback governance report generated with ${report.riskLevel} risk. Azure AI generation was unavailable.`
-            : `Deterministic governance report generated with ${report.riskLevel} risk.`
+            ? `Deterministic fallback governance report v${reportVersion} generated with ${report.riskLevel} risk. Azure AI generation was unavailable.`
+            : `Deterministic governance report v${reportVersion} generated with ${report.riskLevel} risk.`
     })
     .run();
 

@@ -9,15 +9,22 @@ import type { ReviewStatus } from "@/lib/validations";
 type ReportActionsProps = {
   useCaseId: number;
   currentStatus: string;
+  hasReport: boolean;
 };
 
-export function ReportActions({ useCaseId, currentStatus }: ReportActionsProps) {
+export function ReportActions({
+  useCaseId,
+  currentStatus,
+  hasReport
+}: ReportActionsProps) {
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [status, setStatus] = useState<ReviewStatus>(
     currentStatus === "PENDING" ? "NEEDS_REVIEW" : (currentStatus as ReviewStatus)
   );
+  const [note, setNote] = useState("");
+  const [reviewerName, setReviewerName] = useState("Governance reviewer");
   const [error, setError] = useState<string | null>(null);
 
   async function generateReport() {
@@ -46,7 +53,7 @@ export function ReportActions({ useCaseId, currentStatus }: ReportActionsProps) 
     const response = await fetch(`/api/use-cases/${useCaseId}/review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status, note, reviewerName })
     });
 
     setIsReviewing(false);
@@ -56,6 +63,7 @@ export function ReportActions({ useCaseId, currentStatus }: ReportActionsProps) 
       return;
     }
 
+    setNote("");
     router.refresh();
   }
 
@@ -87,6 +95,28 @@ export function ReportActions({ useCaseId, currentStatus }: ReportActionsProps) 
               ))}
             </select>
           </label>
+          <label className="block text-sm font-medium text-ink">
+            <span>Reviewer name</span>
+            <input
+              className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              value={reviewerName}
+              onChange={(event) => setReviewerName(event.target.value)}
+            />
+          </label>
+          <label className="block text-sm font-medium text-ink">
+            <span>Review note</span>
+            <textarea
+              className="mt-2 min-h-24 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              placeholder="Document rationale, required follow-up, or approval conditions."
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </label>
+          {!hasReport ? (
+            <p className="text-xs leading-5 text-muted">
+              Approval decisions require a generated governance report.
+            </p>
+          ) : null}
           <button
             className="w-full rounded-md border border-border bg-panel px-4 py-2.5 text-sm font-semibold text-ink hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isReviewing}

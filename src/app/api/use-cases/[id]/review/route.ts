@@ -1,8 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { auditLogs, useCases } from "@/db/schema";
-import { reviewStatusSchema } from "@/lib/validations";
+import { auditLogs, governanceReports, reviewerNotes, useCases } from "@/db/schema";
+import { reviewUpdateSchema } from "@/lib/validations";
+import { validateReviewWorkflow } from "@/server/governance/workflowControls";
 
 export const runtime = "nodejs";
 
@@ -19,10 +20,13 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const body = await request.json().catch(() => null);
-  const parsed = reviewStatusSchema.safeParse(body?.status);
+  const parsed = reviewUpdateSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid review status" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid review update", issues: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
   const proposal = db
@@ -35,10 +39,29 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Use case not found" }, { status: 404 });
   }
 
+  const latestReport = db
+    .select()
+    .from(governanceReports)
+    .where(eq(governanceReports.useCaseId, numericId))
+    .get();
+
+  const workflowError = validateReviewWorkflow({
+    status: parsed.data.status,
+    note: parsed.data.note,
+    hasReport: Boolean(latestReport)
+  });
+
+  if (workflowError) {
+    return NextResponse.json(
+      { error: workflowError },
+      { status: workflowError.includes("approval") ? 409 : 400 }
+    );
+  }
+
   const updated = db
     .update(useCases)
     .set({
-      status: parsed.data,
+      status: parsed.data.status,
       updatedAt: sql`CURRENT_TIMESTAMP`
     })
     .where(eq(useCases.id, numericId))
@@ -49,9 +72,28 @@ export async function POST(request: Request, context: RouteContext) {
     .values({
       useCaseId: numericId,
       action: "REVIEW_STATUS_UPDATED",
-      note: `Review status updated from ${proposal.status} to ${parsed.data}.`
+      note: `Review status updated from ${proposal.status} to ${parsed.data.status}.`
     })
     .run();
+
+  if (parsed.data.note.length > 0) {
+    db.insert(reviewerNotes)
+      .values({
+        useCaseId: numericId,
+        status: parsed.data.status,
+        note: parsed.data.note,
+        reviewerName: parsed.data.reviewerName || "Governance reviewer"
+      })
+      .run();
+
+    db.insert(auditLogs)
+      .values({
+        useCaseId: numericId,
+        action: "REVIEW_NOTE_ADDED",
+        note: `Reviewer note added for ${parsed.data.status}.`
+      })
+      .run();
+  }
 
   return NextResponse.json(updated);
 }

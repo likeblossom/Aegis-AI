@@ -1,5 +1,5 @@
 import { db } from "./index";
-import { auditLogs, governanceReports, useCases } from "./schema";
+import { auditLogs, governanceReports, reviewerNotes, useCases } from "./schema";
 
 const proposals = [
   {
@@ -85,6 +85,7 @@ const proposals = [
 ] as const;
 
 db.delete(governanceReports).run();
+db.delete(reviewerNotes).run();
 db.delete(auditLogs).run();
 db.delete(useCases).run();
 

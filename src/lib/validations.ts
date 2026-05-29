@@ -19,6 +19,17 @@ export const riskLevelSchema = z.enum(RISK_LEVEL_VALUES);
 export const confidenceLevelSchema = z.enum(CONFIDENCE_LEVEL_VALUES);
 export const finalRecommendationSchema = z.enum(FINAL_RECOMMENDATION_VALUES);
 
+export const reviewUpdateSchema = z.object({
+  status: reviewStatusSchema,
+  note: z.string().trim().max(2000).optional().default(""),
+  reviewerName: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .default("Governance reviewer")
+});
+
 export const createUseCaseSchema = z.object({
   title: requiredText.max(160),
   department: requiredText.max(120),
@@ -36,3 +47,4 @@ export const createUseCaseSchema = z.object({
 export type CreateUseCaseInput = z.infer<typeof createUseCaseSchema>;
 export type UseCaseStatus = z.infer<typeof useCaseStatusSchema>;
 export type ReviewStatus = z.infer<typeof reviewStatusSchema>;
+export type ReviewUpdateInput = z.infer<typeof reviewUpdateSchema>;

@@ -1,7 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { auditLogs, governanceReports, useCases } from "@/db/schema";
+import { auditLogs, governanceReports, reviewerNotes, useCases } from "@/db/schema";
 import { parseGovernanceReportJson } from "@/server/governance/reportTypes";
 
 export const runtime = "nodejs";
@@ -41,9 +41,17 @@ export async function GET(_request: Request, context: RouteContext) {
     .orderBy(desc(governanceReports.createdAt))
     .get();
 
+  const notes = db
+    .select()
+    .from(reviewerNotes)
+    .where(eq(reviewerNotes.useCaseId, numericId))
+    .orderBy(asc(reviewerNotes.createdAt))
+    .all();
+
   return NextResponse.json({
     proposal,
     auditLogs: logs,
+    reviewerNotes: notes,
     governanceReport: reportRecord
       ? {
           ...reportRecord,

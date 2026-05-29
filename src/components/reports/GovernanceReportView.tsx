@@ -1,3 +1,4 @@
+import type { GovernanceReport } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
 import type { GovernanceReportObject } from "@/server/governance/reportTypes";
 import { RationaleSection } from "./RationaleSection";
@@ -8,9 +9,13 @@ import { SimulatedReviews } from "./SimulatedReviews";
 
 type GovernanceReportViewProps = {
   report: GovernanceReportObject | null;
+  reportRecord?: GovernanceReport | null;
 };
 
-export function GovernanceReportView({ report }: GovernanceReportViewProps) {
+export function GovernanceReportView({
+  report,
+  reportRecord
+}: GovernanceReportViewProps) {
   if (!report) {
     return (
       <section className="rounded-lg border border-dashed border-border bg-white p-5 shadow-sm sm:p-6">
@@ -29,6 +34,14 @@ export function GovernanceReportView({ report }: GovernanceReportViewProps) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-ink">Governance analysis</h2>
+          {reportRecord ? (
+            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted">
+              Version {reportRecord.reportVersion} -{" "}
+              {formatEnumLabel(reportRecord.generationProvider)} -{" "}
+              {reportRecord.promptVersion}
+              {reportRecord.model ? ` - ${reportRecord.model}` : ""}
+            </p>
+          ) : null}
           <p className="mt-2 text-sm leading-6 text-muted">
             {report.executiveSummary}
           </p>

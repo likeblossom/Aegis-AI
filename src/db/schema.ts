@@ -45,6 +45,10 @@ export const governanceReports = sqliteTable("governance_reports", {
   aiReadinessScore: integer("ai_readiness_score").notNull(),
   finalRecommendation: text("final_recommendation").notNull(),
   confidenceLevel: text("confidence_level").notNull(),
+  promptVersion: text("prompt_version").notNull().default("deterministic-v1.0"),
+  generationProvider: text("generation_provider").notNull().default("deterministic"),
+  model: text("model"),
+  reportVersion: integer("report_version").notNull().default(1),
   createdAt: text("created_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -53,7 +57,21 @@ export const governanceReports = sqliteTable("governance_reports", {
     .default(sql`CURRENT_TIMESTAMP`)
 });
 
+export const reviewerNotes = sqliteTable("reviewer_notes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  useCaseId: integer("use_case_id")
+    .notNull()
+    .references(() => useCases.id),
+  status: text("status").notNull(),
+  note: text("note").notNull(),
+  reviewerName: text("reviewer_name").notNull().default("Governance reviewer"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+});
+
 export type UseCase = typeof useCases.$inferSelect;
 export type NewUseCase = typeof useCases.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type GovernanceReport = typeof governanceReports.$inferSelect;
+export type ReviewerNote = typeof reviewerNotes.$inferSelect;

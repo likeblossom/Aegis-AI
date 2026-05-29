@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createUseCaseSchema } from "@/lib/validations";
+import { createUseCaseSchema, reviewUpdateSchema } from "@/lib/validations";
 
 const validProposal = {
   title: "Internal FAQ summarization",
@@ -27,5 +27,23 @@ describe("createUseCaseSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("reviewUpdateSchema", () => {
+  it("accepts reviewer status updates with notes", () => {
+    const result = reviewUpdateSchema.safeParse({
+      status: "NEEDS_REVIEW",
+      note: "Requires privacy review before approval.",
+      reviewerName: "IT Governance"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects pending as a reviewer action", () => {
+    expect(reviewUpdateSchema.safeParse({ status: "PENDING" }).success).toBe(
+      false
+    );
   });
 });

@@ -2,6 +2,7 @@ node_modules
 .next
 dist
 coverage
+*.tsbuildinfo
 *.db
 *.db-shm
 *.db-wal

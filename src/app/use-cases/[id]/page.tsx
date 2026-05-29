@@ -5,7 +5,12 @@ import { ReportActions } from "@/components/reports/ReportActions";
 import { BackLink, PageShell } from "@/components/ui/page-shell";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { db } from "@/db";
-import { auditLogs, governanceReports, useCases } from "@/db/schema";
+import {
+  auditLogs,
+  governanceReports,
+  reviewerNotes,
+  useCases
+} from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
 import { parseGovernanceReportJson } from "@/server/governance/reportTypes";
 
@@ -51,6 +56,13 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
   const report = reportRecord
     ? parseGovernanceReportJson(reportRecord.reportJson)
     : null;
+
+  const notes = db
+    .select()
+    .from(reviewerNotes)
+    .where(eq(reviewerNotes.useCaseId, proposal.id))
+    .orderBy(asc(reviewerNotes.createdAt))
+    .all();
 
   return (
     <PageShell>
@@ -100,11 +112,39 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
             </dl>
           </section>
 
-          <GovernanceReportView report={report} />
+          <GovernanceReportView report={report} reportRecord={reportRecord} />
         </div>
 
         <aside className="space-y-6">
-          <ReportActions currentStatus={proposal.status} useCaseId={proposal.id} />
+          <ReportActions
+            currentStatus={proposal.status}
+            hasReport={Boolean(reportRecord)}
+            useCaseId={proposal.id}
+          />
+
+          <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-ink">Reviewer notes</h2>
+            {notes.length === 0 ? (
+              <p className="mt-3 text-sm leading-6 text-muted">
+                No reviewer notes have been added yet.
+              </p>
+            ) : (
+              <ol className="mt-4 space-y-4">
+                {notes.map((note) => (
+                  <li key={note.id} className="border-l-2 border-border pl-4">
+                    <p className="text-sm font-medium text-ink">
+                      {formatEnumLabel(note.status)}
+                    </p>
+                    <p className="mt-1 text-sm text-muted">{note.note}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {note.reviewerName} -{" "}
+                      {new Date(`${note.createdAt}Z`).toLocaleString()}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
 
           <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-ink">Audit log</h2>
