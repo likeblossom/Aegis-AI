@@ -202,11 +202,16 @@ export function buildAzureChatCompletionsBody({
             riskLevel: deterministicReport.riskLevel,
             aiReadinessScore: deterministicReport.aiReadinessScore,
             finalRecommendation: deterministicReport.finalRecommendation,
-            confidenceLevel: deterministicReport.confidenceLevel
+            confidenceLevel: deterministicReport.confidenceLevel,
+            executiveBriefing: deterministicReport.executiveBriefing,
+            changeManagementAnalysis:
+              deterministicReport.changeManagementAnalysis
           },
           instructions: [
             "Preserve the existing report structure exactly.",
+            "Include a short, non-technical executive briefing for managers and stakeholders.",
             "Use the deterministic red flags as required evidence, but expand the rationale and controls where useful.",
+            "Include change management analysis covering affected teams, adoption risk, resistance, training, communication, and mitigation.",
             "Base findings only on the proposal and deterministic signals.",
             "Keep recommendations practical for an early enterprise pilot.",
             "Use concise paragraphs and concrete governance language.",
@@ -298,11 +303,56 @@ const simulatedReviewSchema = {
   }
 };
 
+const changeManagementAnalysisSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "affectedTeams",
+    "adoptionRisk",
+    "expectedResistance",
+    "trainingNeeds",
+    "communicationPlan",
+    "mitigationActions"
+  ],
+  properties: {
+    affectedTeams: { type: "array", items: { type: "string" } },
+    adoptionRisk: { type: "string", enum: ["Low", "Medium", "High"] },
+    expectedResistance: { type: "array", items: { type: "string" } },
+    trainingNeeds: { type: "array", items: { type: "string" } },
+    communicationPlan: { type: "array", items: { type: "string" } },
+    mitigationActions: { type: "array", items: { type: "string" } }
+  }
+};
+
+const executiveBriefingSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "headline",
+    "recommendationSummary",
+    "expectedBusinessValue",
+    "topRisks",
+    "requiredControls",
+    "suggestedNextStep",
+    "decisionQuestion"
+  ],
+  properties: {
+    headline: { type: "string" },
+    recommendationSummary: { type: "string" },
+    expectedBusinessValue: { type: "string" },
+    topRisks: { type: "array", items: { type: "string" } },
+    requiredControls: { type: "array", items: { type: "string" } },
+    suggestedNextStep: { type: "string" },
+    decisionQuestion: { type: "string" }
+  }
+};
+
 const governanceReportJsonSchema = {
   type: "object",
   additionalProperties: false,
   required: [
     "executiveSummary",
+    "executiveBriefing",
     "useCaseClassification",
     "governanceRiskAnalysis",
     "businessImpactAnalysis",
@@ -310,6 +360,7 @@ const governanceReportJsonSchema = {
     "redFlags",
     "requiredControls",
     "rolloutStrategy",
+    "changeManagementAnalysis",
     "simulatedGovernanceReviews",
     "riskLevel",
     "aiReadinessScore",
@@ -318,6 +369,7 @@ const governanceReportJsonSchema = {
   ],
   properties: {
     executiveSummary: { type: "string" },
+    executiveBriefing: executiveBriefingSchema,
     useCaseClassification: {
       type: "object",
       additionalProperties: false,
@@ -340,6 +392,7 @@ const governanceReportJsonSchema = {
     redFlags: { type: "array", items: redFlagSchema },
     requiredControls: { type: "array", items: { type: "string" } },
     rolloutStrategy: { type: "array", items: { type: "string" } },
+    changeManagementAnalysis: changeManagementAnalysisSchema,
     simulatedGovernanceReviews: {
       type: "array",
       items: simulatedReviewSchema

@@ -193,6 +193,71 @@ describe("deterministic governance analysis", () => {
     expect(parseGovernanceReportJson("{not valid")).toBeNull();
   });
 
+  it("includes change management impact analysis in generated reports", () => {
+    const report = generateGovernanceReport({
+      ...baseUseCase,
+      affectedStakeholders:
+        "Employees, service desk analysts, knowledge managers, and IT operations",
+      decisionImpact: "HIGH",
+      dataSensitivity: "CONFIDENTIAL",
+      humanOversightPlanned: "PARTIAL"
+    });
+
+    expect(report.changeManagementAnalysis.affectedTeams).toContain(
+      "Information Technology"
+    );
+    expect(report.changeManagementAnalysis.adoptionRisk).toBe("High");
+    expect(report.changeManagementAnalysis.expectedResistance.length).toBeGreaterThan(
+      0
+    );
+    expect(report.changeManagementAnalysis.trainingNeeds.length).toBeGreaterThan(0);
+    expect(report.changeManagementAnalysis.communicationPlan.length).toBeGreaterThan(
+      0
+    );
+    expect(report.changeManagementAnalysis.mitigationActions.length).toBeGreaterThan(
+      0
+    );
+  });
+
+  it("includes a concise executive briefing in generated reports", () => {
+    const report = generateGovernanceReport(baseUseCase);
+
+    expect(report.executiveBriefing.headline).toContain(baseUseCase.title);
+    expect(report.executiveBriefing.recommendationSummary.length).toBeGreaterThan(
+      0
+    );
+    expect(report.executiveBriefing.expectedBusinessValue).toContain(
+      baseUseCase.expectedBenefit
+    );
+    expect(report.executiveBriefing.topRisks.length).toBeGreaterThan(0);
+    expect(report.executiveBriefing.requiredControls.length).toBeGreaterThan(0);
+    expect(report.executiveBriefing.suggestedNextStep.length).toBeGreaterThan(0);
+    expect(report.executiveBriefing.decisionQuestion).toContain("?");
+  });
+
+  it("parses older report JSON without change management analysis", () => {
+    const report = generateGovernanceReport(baseUseCase);
+    const {
+      executiveBriefing: _executiveBriefing,
+      changeManagementAnalysis: _changeManagementAnalysis,
+      ...legacyReport
+    } = report;
+
+    const parsed = parseGovernanceReportJson(JSON.stringify(legacyReport));
+
+    expect(parsed?.executiveBriefing.headline).toBe(
+      "Executive briefing unavailable"
+    );
+    expect(parsed?.changeManagementAnalysis).toEqual({
+      affectedTeams: [],
+      adoptionRisk: "Low",
+      expectedResistance: [],
+      trainingNeeds: [],
+      communicationPlan: [],
+      mitigationActions: []
+    });
+  });
+
   it("validates review status updates without allowing pending", () => {
     expect(reviewStatusSchema.safeParse("APPROVED_WITH_CONTROLS").success).toBe(
       true

@@ -1,6 +1,8 @@
 import type { GovernanceReport } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
 import type { GovernanceReportObject } from "@/server/governance/reportTypes";
+import { ChangeManagementImpact } from "./ChangeManagementImpact";
+import { ExecutiveBriefing } from "./ExecutiveBriefing";
 import { RationaleSection } from "./RationaleSection";
 import { RedFlagsSection } from "./RedFlagsSection";
 import { RiskBreakdown } from "./RiskBreakdown";
@@ -53,6 +55,10 @@ export function GovernanceReportView({
             {report.executiveSummary}
           </p>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <ExecutiveBriefing briefing={report.executiveBriefing} />
       </div>
 
       <div className="mt-5">
@@ -119,6 +125,7 @@ export function GovernanceReportView({
         </section>
 
         <RationaleSection rationale={report.analysisRationale} />
+        <ChangeManagementImpact analysis={report.changeManagementAnalysis} />
         <RolloutStrategy steps={report.rolloutStrategy} />
         <SimulatedReviews reviews={report.simulatedGovernanceReviews} />
       </div>

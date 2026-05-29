@@ -113,6 +113,8 @@ describe("Azure governance report integration helpers", () => {
     });
 
     expect("model" in body).toBe(false);
+    expect(JSON.stringify(body)).toContain("executiveBriefing");
+    expect(JSON.stringify(body)).toContain("changeManagementAnalysis");
 
     restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
   });

@@ -59,6 +59,170 @@ function rolloutStrategy(useCase: UseCase, riskLevel: string) {
   return steps;
 }
 
+function includesAny(value: string, terms: string[]) {
+  const normalized = value.toLowerCase();
+  return terms.some((term) => normalized.includes(term));
+}
+
+function extractAffectedTeams(useCase: UseCase) {
+  const teams = [
+    useCase.department,
+    useCase.teamOwner,
+    ...useCase.affectedStakeholders
+      .split(/,|;|\band\b/i)
+      .map((stakeholder) => stakeholder.trim())
+      .filter(Boolean)
+  ];
+
+  return Array.from(new Set(teams)).slice(0, 6);
+}
+
+function adoptionRisk(useCase: UseCase): "Low" | "Medium" | "High" {
+  const riskSignals = [
+    useCase.decisionImpact === "HIGH",
+    ["CONFIDENTIAL", "SENSITIVE"].includes(useCase.dataSensitivity),
+    useCase.humanOversightPlanned === "NO",
+    useCase.humanOversightPlanned === "PARTIAL",
+    includesAny(useCase.proposedSolution, [
+      "fully automated",
+      "replace",
+      "rank",
+      "approve",
+      "reject",
+      "screen"
+    ]),
+    includesAny(useCase.implementationTimeline, ["week", "weeks"]) &&
+      !includesAny(useCase.implementationTimeline, ["12 weeks", "16 weeks"])
+  ].filter(Boolean).length;
+
+  if (riskSignals >= 4) {
+    return "High";
+  }
+
+  if (riskSignals >= 2) {
+    return "Medium";
+  }
+
+  return "Low";
+}
+
+function changeManagementAnalysis(useCase: UseCase) {
+  const risk = adoptionRisk(useCase);
+  const expectedResistance = [
+    "Users may be uncertain about how AI-assisted outputs will be evaluated and challenged."
+  ];
+  const trainingNeeds = [
+    "Train users on the intended workflow, review responsibilities, and escalation path.",
+    "Provide examples of acceptable and unacceptable AI-assisted outputs."
+  ];
+  const communicationPlan = [
+    "Announce pilot scope, accountable owner, and success measures before launch.",
+    "Share how feedback, overrides, and issues will be captured during rollout."
+  ];
+  const mitigationActions = [
+    "Start with a limited pilot and review adoption feedback before expansion.",
+    "Keep a named human owner accountable for decisions and exception handling."
+  ];
+
+  if (useCase.decisionImpact === "HIGH") {
+    expectedResistance.push(
+      "Affected teams may worry about accountability for high-impact recommendations or decisions."
+    );
+    trainingNeeds.push(
+      "Train reviewers on decision accountability, appeal paths, and when to override AI output."
+    );
+    communicationPlan.push(
+      "Explain that final authority remains with designated human reviewers during the pilot."
+    );
+  }
+
+  if (["CONFIDENTIAL", "SENSITIVE"].includes(useCase.dataSensitivity)) {
+    expectedResistance.push(
+      "Privacy, security, or compliance teams may need assurance on data access and retention."
+    );
+    trainingNeeds.push(
+      "Train pilot users on approved data handling, access boundaries, and retention expectations."
+    );
+    mitigationActions.push(
+      "Confirm privacy and security controls before broad stakeholder rollout."
+    );
+  }
+
+  if (useCase.humanOversightPlanned !== "YES") {
+    expectedResistance.push(
+      "Employees may resist adoption if the oversight model is unclear or feels too automated."
+    );
+    mitigationActions.push(
+      "Define human review checkpoints and publish escalation criteria before launch."
+    );
+  }
+
+  if (risk === "High") {
+    communicationPlan.push(
+      "Hold targeted briefings with impacted teams before enabling production use."
+    );
+    mitigationActions.push(
+      "Schedule a governance checkpoint before moving beyond the first pilot cohort."
+    );
+  }
+
+  return {
+    affectedTeams: extractAffectedTeams(useCase),
+    adoptionRisk: risk,
+    expectedResistance,
+    trainingNeeds,
+    communicationPlan,
+    mitigationActions
+  };
+}
+
+function executiveBriefing({
+  useCase,
+  riskLevel,
+  finalRecommendation,
+  controls,
+  redFlags
+}: {
+  useCase: UseCase;
+  riskLevel: string;
+  finalRecommendation: string;
+  controls: string[];
+  redFlags: ReturnType<typeof detectRedFlags>;
+}) {
+  const recommendationLabel = formatEnumLabel(finalRecommendation).toLowerCase();
+  const riskLabel = formatEnumLabel(riskLevel).toLowerCase();
+  const topRisks =
+    redFlags.length > 0
+      ? redFlags.slice(0, 3).map((flag) => flag.issue)
+      : [
+          `${formatEnumLabel(
+            useCase.dataSensitivity
+          )} data and ${formatEnumLabel(
+            useCase.decisionImpact
+          ).toLowerCase()} decision impact still require standard review.`
+        ];
+
+  const suggestedNextStep =
+    riskLevel === "CRITICAL"
+      ? "Hold a governance review before any pilot or production use."
+      : riskLevel === "HIGH"
+        ? "Run a controlled pilot only after confirming ownership, controls, and success measures."
+        : finalRecommendation === "APPROVED"
+          ? "Proceed with a limited pilot and monitor quality, adoption, and exceptions."
+          : "Confirm required controls, then decide whether to proceed with a limited pilot.";
+
+  return {
+    headline: `${useCase.title} is a ${riskLabel} proposal with a ${recommendationLabel} recommendation.`,
+    recommendationSummary: `The current assessment recommends ${recommendationLabel} because the proposal has ${riskLabel} governance risk and an AI readiness score that should guide pilot timing.`,
+    expectedBusinessValue: `${useCase.expectedBenefit} Managers should validate this value through measurable pilot outcomes before scaling.`,
+    topRisks,
+    requiredControls: controls.slice(0, 3),
+    suggestedNextStep,
+    decisionQuestion:
+      "Is the expected business value strong enough to proceed with the required controls and oversight?"
+  };
+}
+
 export function generateGovernanceReport(
   useCase: UseCase
 ): GovernanceReportObject {
@@ -82,6 +246,13 @@ export function generateGovernanceReport(
     ).toLowerCase()} decision impact. The deterministic review recommends ${formatEnumLabel(
       finalRecommendation
     ).toLowerCase()} at this stage.`,
+    executiveBriefing: executiveBriefing({
+      useCase,
+      riskLevel: score.riskLevel,
+      finalRecommendation,
+      controls,
+      redFlags
+    }),
     useCaseClassification: {
       department: useCase.department,
       dataSensitivity: useCase.dataSensitivity,
@@ -136,6 +307,7 @@ export function generateGovernanceReport(
     redFlags,
     requiredControls: controls,
     rolloutStrategy: rolloutStrategy(useCase, score.riskLevel),
+    changeManagementAnalysis: changeManagementAnalysis(useCase),
     simulatedGovernanceReviews: [
       {
         reviewer: "IT Governance",
