@@ -35,6 +35,25 @@ export const auditLogs = sqliteTable("audit_logs", {
     .default(sql`CURRENT_TIMESTAMP`)
 });
 
+export const governanceReports = sqliteTable("governance_reports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  useCaseId: integer("use_case_id")
+    .notNull()
+    .references(() => useCases.id),
+  reportJson: text("report_json").notNull(),
+  riskLevel: text("risk_level").notNull(),
+  aiReadinessScore: integer("ai_readiness_score").notNull(),
+  finalRecommendation: text("final_recommendation").notNull(),
+  confidenceLevel: text("confidence_level").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`)
+});
+
 export type UseCase = typeof useCases.$inferSelect;
 export type NewUseCase = typeof useCases.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type GovernanceReport = typeof governanceReports.$inferSelect;

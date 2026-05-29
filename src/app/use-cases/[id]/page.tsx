@@ -1,10 +1,13 @@
-import { eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { GovernanceReportView } from "@/components/reports/GovernanceReportView";
+import { ReportActions } from "@/components/reports/ReportActions";
 import { BackLink, PageShell } from "@/components/ui/page-shell";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { db } from "@/db";
-import { auditLogs, useCases } from "@/db/schema";
+import { auditLogs, governanceReports, useCases } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
+import { parseGovernanceReportJson } from "@/server/governance/reportTypes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,7 +38,19 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
     .select()
     .from(auditLogs)
     .where(eq(auditLogs.useCaseId, proposal.id))
+    .orderBy(asc(auditLogs.createdAt))
     .all();
+
+  const reportRecord = db
+    .select()
+    .from(governanceReports)
+    .where(eq(governanceReports.useCaseId, proposal.id))
+    .orderBy(desc(governanceReports.createdAt))
+    .get();
+
+  const report = reportRecord
+    ? parseGovernanceReportJson(reportRecord.reportJson)
+    : null;
 
   return (
     <PageShell>
@@ -50,47 +65,46 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-lg font-semibold text-ink">Proposal details</h2>
-          <dl className="mt-5 grid gap-5">
-            <DetailItem label="Team owner" value={proposal.teamOwner} />
-            <DetailItem label="Current process" value={proposal.currentProcess} />
-            <DetailItem
-              label="Proposed AI solution"
-              value={proposal.proposedSolution}
-            />
-            <DetailItem label="Expected benefit" value={proposal.expectedBenefit} />
-            <DetailItem
-              label="Data sensitivity"
-              value={formatEnumLabel(proposal.dataSensitivity)}
-            />
-            <DetailItem
-              label="Decision impact"
-              value={formatEnumLabel(proposal.decisionImpact)}
-            />
-            <DetailItem
-              label="Human oversight planned"
-              value={formatEnumLabel(proposal.humanOversightPlanned)}
-            />
-            <DetailItem
-              label="Affected stakeholders"
-              value={proposal.affectedStakeholders}
-            />
-            <DetailItem
-              label="Implementation timeline"
-              value={proposal.implementationTimeline}
-            />
-          </dl>
-        </section>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div className="space-y-6">
+          <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
+            <h2 className="text-lg font-semibold text-ink">Proposal details</h2>
+            <dl className="mt-5 grid gap-5">
+              <DetailItem label="Team owner" value={proposal.teamOwner} />
+              <DetailItem label="Current process" value={proposal.currentProcess} />
+              <DetailItem
+                label="Proposed AI solution"
+                value={proposal.proposedSolution}
+              />
+              <DetailItem label="Expected benefit" value={proposal.expectedBenefit} />
+              <DetailItem
+                label="Data sensitivity"
+                value={formatEnumLabel(proposal.dataSensitivity)}
+              />
+              <DetailItem
+                label="Decision impact"
+                value={formatEnumLabel(proposal.decisionImpact)}
+              />
+              <DetailItem
+                label="Human oversight planned"
+                value={formatEnumLabel(proposal.humanOversightPlanned)}
+              />
+              <DetailItem
+                label="Affected stakeholders"
+                value={proposal.affectedStakeholders}
+              />
+              <DetailItem
+                label="Implementation timeline"
+                value={proposal.implementationTimeline}
+              />
+            </dl>
+          </section>
+
+          <GovernanceReportView report={report} />
+        </div>
 
         <aside className="space-y-6">
-          <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-ink">Governance analysis</h2>
-            <p className="mt-3 text-sm leading-6 text-muted">
-              Governance analysis will be added in a future iteration.
-            </p>
-          </section>
+          <ReportActions currentStatus={proposal.status} useCaseId={proposal.id} />
 
           <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-ink">Audit log</h2>

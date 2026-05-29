@@ -1,5 +1,5 @@
 import { db } from "./index";
-import { auditLogs, useCases } from "./schema";
+import { auditLogs, governanceReports, useCases } from "./schema";
 
 const proposals = [
   {
@@ -84,6 +84,7 @@ const proposals = [
   }
 ] as const;
 
+db.delete(governanceReports).run();
 db.delete(auditLogs).run();
 db.delete(useCases).run();
 
@@ -101,7 +102,7 @@ for (const proposal of proposals) {
     .values({
       useCaseId: created.id,
       action: "PROPOSAL_CREATED",
-      note: "Seed proposal created."
+      note: "Proposal created."
     })
     .run();
 }

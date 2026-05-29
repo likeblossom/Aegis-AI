@@ -17,6 +17,19 @@ export const USE_CASE_STATUS_VALUES = [
   "REJECTED"
 ] as const;
 
+export const REVIEW_STATUS_VALUES = [
+  "APPROVED",
+  "APPROVED_WITH_CONTROLS",
+  "NEEDS_REVIEW",
+  "REJECTED"
+] as const;
+
+export const RISK_LEVEL_VALUES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+
+export const CONFIDENCE_LEVEL_VALUES = ["LOW", "MEDIUM", "HIGH"] as const;
+
+export const FINAL_RECOMMENDATION_VALUES = REVIEW_STATUS_VALUES;
+
 export const DEFAULT_USE_CASE_STATUS = "PENDING";
 
 export function formatEnumLabel(value: string) {
