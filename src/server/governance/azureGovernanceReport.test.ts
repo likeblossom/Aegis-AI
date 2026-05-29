@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { UseCase } from "@/db/schema";
 import {
+  applyDeterministicGuardrails,
   buildAzureChatCompletionsBody,
   buildAzureChatCompletionsUrl,
   extractAzureMessageContent,
@@ -11,6 +12,7 @@ import {
   isAzureGovernanceConfigured
 } from "./azureGovernanceReport";
 import { generateGovernanceReport } from "./generateGovernanceReport";
+import { generateGovernanceSignals } from "./generateGovernanceSignals";
 
 describe("Azure governance report integration helpers", () => {
   it("detects whether Azure governance generation is configured", () => {
@@ -109,14 +111,45 @@ describe("Azure governance report integration helpers", () => {
 
     const body = buildAzureChatCompletionsBody({
       useCase: baseUseCase,
-      deterministicReport: generateGovernanceReport(baseUseCase)
+      signals: generateGovernanceSignals(baseUseCase)
     });
 
     expect("model" in body).toBe(false);
-    expect(JSON.stringify(body)).toContain("executiveBriefing");
-    expect(JSON.stringify(body)).toContain("changeManagementAnalysis");
+    const bodyText = JSON.stringify(body);
+    expect(bodyText).toContain("deterministicSignals");
+    expect(bodyText).toContain("guardrailWarnings");
+    expect(bodyText).toContain("Preserve deterministic riskLevel exactly");
 
     restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
+  });
+
+  it("enforces deterministic guardrails over Azure report output", () => {
+    const signals = generateGovernanceSignals({
+      ...baseUseCase,
+      title: "Resume screening assistant",
+      department: "Human Resources",
+      proposedSolution: "Use AI to rank resumes for recruiter review.",
+      dataSensitivity: "SENSITIVE",
+      decisionImpact: "HIGH",
+      humanOversightPlanned: "PARTIAL"
+    });
+    const azureReport = {
+      ...generateGovernanceReport(baseUseCase),
+      riskLevel: "LOW" as const,
+      aiReadinessScore: 100,
+      finalRecommendation: "APPROVED" as const,
+      confidenceLevel: "LOW" as const,
+      redFlags: []
+    };
+
+    const report = applyDeterministicGuardrails(azureReport, signals);
+
+    expect(report.riskLevel).toBe(signals.riskLevel);
+    expect(report.finalRecommendation).toBe(signals.finalRecommendation);
+    expect(report.aiReadinessScore).toBe(signals.aiReadinessScore);
+    expect(report.confidenceLevel).toBe(signals.confidenceLevel);
+    expect(report.redFlags).toEqual(signals.deterministicRedFlags);
+    expect(report.generationMetadata.generationMode).toBe("AZURE_OPENAI");
   });
 
   it("extracts chat completion message content", () => {

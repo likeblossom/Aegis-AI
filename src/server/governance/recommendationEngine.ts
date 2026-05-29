@@ -10,7 +10,7 @@ export function recommendGovernanceDecision({
   redFlags: RedFlag[];
 }) {
   if (riskLevel === "CRITICAL") {
-    return "REJECTED" as const;
+    return "NEEDS_REVIEW" as const;
   }
 
   if (

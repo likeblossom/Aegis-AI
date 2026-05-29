@@ -43,7 +43,7 @@ describe("generateGovernanceReportWithWorkflow", () => {
     }
   });
 
-  it("persists deterministic fallback reports when Azure is not configured", async () => {
+  it("persists local fallback reports when Azure is not configured", async () => {
     const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
     const originalKey = process.env.AZURE_AI_KEY;
     delete process.env.AZURE_AI_ENDPOINT;
@@ -52,15 +52,16 @@ describe("generateGovernanceReportWithWorkflow", () => {
     const useCase = createUseCase();
     const result = await generateGovernanceReportWithWorkflow(useCase);
 
-    expect(result.analysisMode).toBe("deterministic");
+    expect(result.analysisMode).toBe("LOCAL_FALLBACK");
     expect(result.fallbackReason).toBeNull();
     expect(result.reportRecord.reportVersion).toBe(1);
-    expect(result.reportRecord.generationProvider).toBe("deterministic");
+    expect(result.reportRecord.generationProvider).toBe("LOCAL_FALLBACK");
     expect(result.workflowRunId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     );
     expect(result.workflowPath).toEqual([
       "deterministic_analysis",
+      "local_fallback",
       "validate_report",
       "persist_report"
     ]);
@@ -72,7 +73,7 @@ describe("generateGovernanceReportWithWorkflow", () => {
       .get();
 
     expect(reportAuditLog?.note).toBe(
-      "Governance report generated. Initial assessment identified a Low Risk rating requiring further review."
+      "Governance report generated using local fallback analysis."
     );
     expect(reportAuditLog?.note).not.toContain(result.workflowRunId);
 

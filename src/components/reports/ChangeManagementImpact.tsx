@@ -58,11 +58,11 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
 }
 
 function adoptionRiskStyle(risk: ChangeManagementAnalysis["adoptionRisk"]) {
-  if (risk === "High") {
+  if (risk === "HIGH") {
     return "border-red-700 bg-red-200 text-red-950";
   }
 
-  if (risk === "Medium") {
+  if (risk === "MEDIUM") {
     return "border-yellow-500 bg-yellow-100 text-yellow-950";
   }
 

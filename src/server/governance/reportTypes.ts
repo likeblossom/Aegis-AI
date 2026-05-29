@@ -29,7 +29,7 @@ export type SimulatedGovernanceReview = {
 
 export type ChangeManagementAnalysis = {
   affectedTeams: string[];
-  adoptionRisk: "Low" | "Medium" | "High";
+  adoptionRisk: "LOW" | "MEDIUM" | "HIGH";
   expectedResistance: string[];
   trainingNeeds: string[];
   communicationPlan: string[];
@@ -44,6 +44,18 @@ export type ExecutiveBriefing = {
   requiredControls: string[];
   suggestedNextStep: string;
   decisionQuestion: string;
+};
+
+export type ProposalChallenger = {
+  reasonsThisMightFail: string[];
+  assumptionsToValidate: string[];
+  questionsForStakeholders: string[];
+};
+
+export type ReportGenerationMetadata = {
+  generationMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
+  modelDeployment?: string;
+  promptVersion: string;
 };
 
 export type GovernanceReportObject = {
@@ -62,7 +74,12 @@ export type GovernanceReportObject = {
   requiredControls: string[];
   rolloutStrategy: string[];
   changeManagementAnalysis: ChangeManagementAnalysis;
+  stakeholderImpactAnalysis: string;
+  proposalChallenger: ProposalChallenger;
+  successMetrics: string[];
+  assumptionsAndUncertainties: string[];
   simulatedGovernanceReviews: SimulatedGovernanceReview[];
+  generationMetadata: ReportGenerationMetadata;
   riskLevel: (typeof RISK_LEVEL_VALUES)[number];
   aiReadinessScore: number;
   finalRecommendation: (typeof FINAL_RECOMMENDATION_VALUES)[number];
@@ -78,7 +95,11 @@ const redFlagSchema = z.object({
 const changeManagementAnalysisSchema = z
   .object({
     affectedTeams: z.array(z.string()),
-    adoptionRisk: z.enum(["Low", "Medium", "High"]),
+    adoptionRisk: z.preprocess(
+      (value) =>
+        typeof value === "string" ? value.toUpperCase() : value,
+      z.enum(["LOW", "MEDIUM", "HIGH"])
+    ),
     expectedResistance: z.array(z.string()),
     trainingNeeds: z.array(z.string()),
     communicationPlan: z.array(z.string()),
@@ -86,11 +107,34 @@ const changeManagementAnalysisSchema = z
   })
   .default({
     affectedTeams: [],
-    adoptionRisk: "Low",
+    adoptionRisk: "LOW",
     expectedResistance: [],
     trainingNeeds: [],
     communicationPlan: [],
     mitigationActions: []
+  });
+
+const proposalChallengerSchema = z
+  .object({
+    reasonsThisMightFail: z.array(z.string()),
+    assumptionsToValidate: z.array(z.string()),
+    questionsForStakeholders: z.array(z.string())
+  })
+  .default({
+    reasonsThisMightFail: [],
+    assumptionsToValidate: [],
+    questionsForStakeholders: []
+  });
+
+const generationMetadataSchema = z
+  .object({
+    generationMode: z.enum(["AZURE_OPENAI", "LOCAL_FALLBACK"]),
+    modelDeployment: z.string().optional(),
+    promptVersion: z.string()
+  })
+  .default({
+    generationMode: "LOCAL_FALLBACK",
+    promptVersion: "legacy-report"
   });
 
 const executiveBriefingSchema = z
@@ -140,6 +184,10 @@ export const governanceReportSchema = z.object({
   requiredControls: z.array(z.string()),
   rolloutStrategy: z.array(z.string()),
   changeManagementAnalysis: changeManagementAnalysisSchema,
+  stakeholderImpactAnalysis: z.string().default(""),
+  proposalChallenger: proposalChallengerSchema,
+  successMetrics: z.array(z.string()).default([]),
+  assumptionsAndUncertainties: z.array(z.string()).default([]),
   simulatedGovernanceReviews: z.array(
     z.object({
       reviewer: z.string(),
@@ -148,6 +196,7 @@ export const governanceReportSchema = z.object({
       approvalConditions: z.array(z.string())
     })
   ),
+  generationMetadata: generationMetadataSchema,
   riskLevel: z.enum(RISK_LEVEL_VALUES),
   aiReadinessScore: z.number().int().min(0).max(100),
   finalRecommendation: z.enum(FINAL_RECOMMENDATION_VALUES),

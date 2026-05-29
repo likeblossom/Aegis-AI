@@ -17,10 +17,16 @@ export function PageShell({ children, maxWidth = "default" }: PageShellProps) {
   );
 }
 
-export function BackLink() {
+export function BackLink({
+  href = "/",
+  children = "Back to dashboard"
+}: {
+  href?: string;
+  children?: ReactNode;
+}) {
   return (
-    <Link className="text-sm font-medium text-slate-700 hover:text-ink" href="/">
-      Back to dashboard
+    <Link className="text-sm font-medium text-slate-700 hover:text-ink" href={href}>
+      {children}
     </Link>
   );
 }

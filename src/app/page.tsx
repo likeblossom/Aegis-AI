@@ -70,6 +70,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="flex flex-wrap gap-3">
           <Link
             className="inline-flex w-fit rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-panel"
+            href="/discovery"
+          >
+            Discover opportunities
+          </Link>
+          <Link
+            className="inline-flex w-fit rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-panel"
             href="/portfolio"
           >
             Portfolio priorities

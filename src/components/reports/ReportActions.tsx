@@ -49,16 +49,16 @@ export function ReportActions({
     }
 
     const body = (await response.json()) as {
-      analysisMode: "azure" | "deterministic";
+      analysisMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
       fallbackReason: string | null;
     };
 
     setGenerationNotice(
-      body.analysisMode === "azure"
-        ? "Azure AI generated the latest governance report."
+      body.analysisMode === "AZURE_OPENAI"
+        ? "Azure OpenAI generated the latest governance report with deterministic guardrails."
         : body.fallbackReason
-          ? "Azure AI was unavailable, so the deterministic fallback generated the report."
-          : "The deterministic engine generated the report."
+          ? "Azure OpenAI was unavailable, so local fallback analysis generated the report."
+          : "Local fallback analysis generated the report."
     );
     router.refresh();
   }
@@ -99,7 +99,7 @@ export function ReportActions({
         </button>
         <p className="text-xs leading-5 text-muted">
           Azure analysis can take several seconds. If Azure is unavailable, Aegis-AI
-          saves a deterministic fallback report.
+          saves a local fallback report.
         </p>
         {generationNotice ? (
           <p className="rounded-md border border-border bg-panel px-3 py-2 text-xs leading-5 text-muted">

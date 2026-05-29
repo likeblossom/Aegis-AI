@@ -1,10 +1,11 @@
 import type { UseCase } from "@/db/schema";
+import type { GovernanceSignals } from "./generateGovernanceSignals";
 import {
   governanceReportSchema,
   type GovernanceReportObject
 } from "./reportTypes";
 
-export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v1.0";
+export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v2.0";
 
 const DEFAULT_AZURE_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21";
@@ -102,10 +103,10 @@ export function isRetryableAzureStatus(status: number) {
 
 export async function generateAzureGovernanceReport({
   useCase,
-  deterministicReport
+  signals
 }: {
   useCase: UseCase;
-  deterministicReport: GovernanceReportObject;
+  signals: GovernanceSignals;
 }) {
   const apiKey = process.env.AZURE_AI_KEY;
 
@@ -116,7 +117,7 @@ export async function generateAzureGovernanceReport({
   const request = {
     url: buildAzureChatCompletionsUrl(),
     body: JSON.stringify(
-      buildAzureChatCompletionsBody({ useCase, deterministicReport })
+      buildAzureChatCompletionsBody({ useCase, signals })
     )
   };
 
@@ -162,7 +163,10 @@ export async function generateAzureGovernanceReport({
         throw new Error("Azure AI response did not include message content.");
       }
 
-      return governanceReportSchema.parse(JSON.parse(outputText));
+      return applyDeterministicGuardrails(
+        governanceReportSchema.parse(JSON.parse(outputText)),
+        signals
+      );
     } catch (error) {
       lastError = error;
 
@@ -179,10 +183,10 @@ export async function generateAzureGovernanceReport({
 
 export function buildAzureChatCompletionsBody({
   useCase,
-  deterministicReport
+  signals
 }: {
   useCase: UseCase;
-  deterministicReport: GovernanceReportObject;
+  signals: GovernanceSignals;
 }) {
   return {
     ...(getAzureOpenAIDeployment() ? {} : { model: getAzureGovernanceModel() }),
@@ -190,31 +194,34 @@ export function buildAzureChatCompletionsBody({
       {
         role: "system",
         content:
-          "You are an enterprise AI governance analyst. Produce explainable, evidence-based governance analysis for internal AI use-case proposals. You support human reviewers and must not claim to be the final decision-maker. Return only valid JSON matching the requested schema."
+          "You are an enterprise AI governance analyst. Produce stakeholder-ready governance report content for internal AI use-case proposals. You support human reviewers and must not claim to be the final decision-maker. Deterministic governance signals are authoritative guardrails. Return only valid JSON matching the requested schema."
       },
       {
         role: "user",
         content: JSON.stringify({
           promptVersion: GOVERNANCE_PROMPT_VERSION,
-          proposal: useCase,
-          deterministicSignals: {
-            redFlags: deterministicReport.redFlags,
-            riskLevel: deterministicReport.riskLevel,
-            aiReadinessScore: deterministicReport.aiReadinessScore,
-            finalRecommendation: deterministicReport.finalRecommendation,
-            confidenceLevel: deterministicReport.confidenceLevel,
-            executiveBriefing: deterministicReport.executiveBriefing,
-            changeManagementAnalysis:
-              deterministicReport.changeManagementAnalysis
+          expectedGenerationMetadata: {
+            generationMode: "AZURE_OPENAI",
+            modelDeployment: getAzureGovernanceModel(),
+            promptVersion: GOVERNANCE_PROMPT_VERSION
           },
+          proposal: useCase,
+          deterministicSignals: signals,
           instructions: [
-            "Preserve the existing report structure exactly.",
-            "Include a short, non-technical executive briefing for managers and stakeholders.",
-            "Use the deterministic red flags as required evidence, but expand the rationale and controls where useful.",
-            "Include change management analysis covering affected teams, adoption risk, resistance, training, communication, and mitigation.",
+            "Generate the full structured governance report. Azure OpenAI is responsible for stakeholder-facing narrative, rationale, controls, rollout, executive briefing, challenger analysis, success metrics, assumptions, and change-management analysis.",
+            "Preserve deterministic riskLevel exactly.",
+            "Preserve deterministic finalRecommendation exactly.",
+            "Preserve deterministic aiReadinessScore and confidenceLevel exactly.",
+            "Preserve deterministicRedFlags exactly in the redFlags field and explain them.",
+            "Do not downgrade or soften critical deterministic guardrail findings.",
+            "Use guardrailWarnings as mandatory constraints for recommendations.",
             "Base findings only on the proposal and deterministic signals.",
-            "Keep recommendations practical for an early enterprise pilot.",
-            "Use concise paragraphs and concrete governance language.",
+            "Do not invent facts not supported by the proposal.",
+            "Include assumptionsAndUncertainties when information is missing.",
+            "Keep explanations concise, business-oriented, and practical for an early enterprise pilot.",
+            "Set generationMetadata.generationMode to AZURE_OPENAI.",
+            "Set generationMetadata.modelDeployment to the configured model or deployment name.",
+            "Set generationMetadata.promptVersion to the provided promptVersion.",
             "Return JSON only."
           ]
         })
@@ -229,7 +236,26 @@ export function buildAzureChatCompletionsBody({
       }
     },
     temperature: 0.2,
-    max_tokens: 4000
+    max_tokens: 6000
+  };
+}
+
+export function applyDeterministicGuardrails(
+  report: GovernanceReportObject,
+  signals: GovernanceSignals
+): GovernanceReportObject {
+  return {
+    ...report,
+    redFlags: signals.deterministicRedFlags,
+    riskLevel: signals.riskLevel,
+    aiReadinessScore: signals.aiReadinessScore,
+    finalRecommendation: signals.finalRecommendation,
+    confidenceLevel: signals.confidenceLevel,
+    generationMetadata: {
+      generationMode: "AZURE_OPENAI",
+      modelDeployment: getAzureGovernanceModel(),
+      promptVersion: GOVERNANCE_PROMPT_VERSION
+    }
   };
 }
 
@@ -316,11 +342,26 @@ const changeManagementAnalysisSchema = {
   ],
   properties: {
     affectedTeams: { type: "array", items: { type: "string" } },
-    adoptionRisk: { type: "string", enum: ["Low", "Medium", "High"] },
+    adoptionRisk: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
     expectedResistance: { type: "array", items: { type: "string" } },
     trainingNeeds: { type: "array", items: { type: "string" } },
     communicationPlan: { type: "array", items: { type: "string" } },
     mitigationActions: { type: "array", items: { type: "string" } }
+  }
+};
+
+const proposalChallengerSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "reasonsThisMightFail",
+    "assumptionsToValidate",
+    "questionsForStakeholders"
+  ],
+  properties: {
+    reasonsThisMightFail: { type: "array", items: { type: "string" } },
+    assumptionsToValidate: { type: "array", items: { type: "string" } },
+    questionsForStakeholders: { type: "array", items: { type: "string" } }
   }
 };
 
@@ -347,6 +388,20 @@ const executiveBriefingSchema = {
   }
 };
 
+const generationMetadataSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["generationMode", "modelDeployment", "promptVersion"],
+  properties: {
+    generationMode: {
+      type: "string",
+      enum: ["AZURE_OPENAI", "LOCAL_FALLBACK"]
+    },
+    modelDeployment: { type: "string" },
+    promptVersion: { type: "string" }
+  }
+};
+
 const governanceReportJsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -361,7 +416,12 @@ const governanceReportJsonSchema = {
     "requiredControls",
     "rolloutStrategy",
     "changeManagementAnalysis",
+    "stakeholderImpactAnalysis",
+    "proposalChallenger",
+    "successMetrics",
+    "assumptionsAndUncertainties",
     "simulatedGovernanceReviews",
+    "generationMetadata",
     "riskLevel",
     "aiReadinessScore",
     "finalRecommendation",
@@ -393,10 +453,15 @@ const governanceReportJsonSchema = {
     requiredControls: { type: "array", items: { type: "string" } },
     rolloutStrategy: { type: "array", items: { type: "string" } },
     changeManagementAnalysis: changeManagementAnalysisSchema,
+    stakeholderImpactAnalysis: { type: "string" },
+    proposalChallenger: proposalChallengerSchema,
+    successMetrics: { type: "array", items: { type: "string" } },
+    assumptionsAndUncertainties: { type: "array", items: { type: "string" } },
     simulatedGovernanceReviews: {
       type: "array",
       items: simulatedReviewSchema
     },
+    generationMetadata: generationMetadataSchema,
     riskLevel: { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
     aiReadinessScore: { type: "integer", minimum: 0, maximum: 100 },
     finalRecommendation: {

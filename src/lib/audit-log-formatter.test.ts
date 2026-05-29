@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildReportGeneratedAuditNote,
+  buildOpportunityConvertedAuditNote,
+  buildOpportunityDiscoveryRunAuditNote,
   buildReviewNoteAddedAuditNote,
   buildReviewerAssignedAuditNote,
   buildReviewStatusUpdatedAuditNote,
@@ -12,14 +14,23 @@ describe("audit-log-formatter", () => {
   it("builds business-readable report generated messages", () => {
     expect(
       buildReportGeneratedAuditNote({
-        analysisMode: "azure",
+        analysisMode: "AZURE_OPENAI",
         reportVersion: 1,
         riskLevel: "CRITICAL",
         fallbackReason: null
       })
     ).toBe(
-      "Governance report generated. Initial assessment identified a Critical Risk rating requiring further review."
+      "Governance report generated using Azure OpenAI with deterministic governance guardrails."
     );
+
+    expect(
+      buildReportGeneratedAuditNote({
+        analysisMode: "LOCAL_FALLBACK",
+        reportVersion: 1,
+        riskLevel: "LOW",
+        fallbackReason: null
+      })
+    ).toBe("Governance report generated using local fallback analysis.");
   });
 
   it("converts review status enum values to labels", () => {
@@ -29,6 +40,18 @@ describe("audit-log-formatter", () => {
         newStatus: "NEEDS_REVIEW"
       })
     ).toBe("Review status updated from Pending Review to Requires Review.");
+  });
+
+  it("builds business-readable opportunity discovery messages", () => {
+    expect(buildOpportunityDiscoveryRunAuditNote()).toBe(
+      "AI opportunity discovery completed."
+    );
+    expect(buildOpportunityConvertedAuditNote()).toBe(
+      "Opportunity converted into governance proposal."
+    );
+    expect(
+      formatAuditNoteForDisplay("OPPORTUNITY_DISCOVERY_RUN", "internal debug")
+    ).toBe("AI opportunity discovery completed.");
   });
 
   it("keeps reviewer assignment messages simple for unchanged reviewers", () => {
@@ -57,7 +80,7 @@ describe("audit-log-formatter", () => {
         "[workflow a2b9b3fd-6f92-4588-a478-4645f3c5b9c7] Azure AI governance report v1 generated with CRITICAL risk."
       )
     ).toBe(
-      "Governance report generated. Initial assessment identified a Critical Risk rating requiring further review."
+      "Governance report generated using Azure OpenAI with deterministic governance guardrails."
     );
 
     expect(

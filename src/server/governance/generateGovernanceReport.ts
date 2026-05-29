@@ -1,9 +1,13 @@
 import type { UseCase } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
 import { detectRedFlags } from "./redFlags";
-import { recommendGovernanceDecision } from "./recommendationEngine";
 import type { GovernanceReportObject } from "./reportTypes";
-import { scoreGovernanceRisk } from "./riskScoring";
+import {
+  generateGovernanceSignals,
+  type GovernanceSignals
+} from "./generateGovernanceSignals";
+
+export const LOCAL_FALLBACK_PROMPT_VERSION = "local-fallback-governance-v1.0";
 
 function automationProfile(useCase: UseCase) {
   if (useCase.humanOversightPlanned === "NO") {
@@ -77,7 +81,7 @@ function extractAffectedTeams(useCase: UseCase) {
   return Array.from(new Set(teams)).slice(0, 6);
 }
 
-function adoptionRisk(useCase: UseCase): "Low" | "Medium" | "High" {
+function adoptionRisk(useCase: UseCase): "LOW" | "MEDIUM" | "HIGH" {
   const riskSignals = [
     useCase.decisionImpact === "HIGH",
     ["CONFIDENTIAL", "SENSITIVE"].includes(useCase.dataSensitivity),
@@ -96,14 +100,14 @@ function adoptionRisk(useCase: UseCase): "Low" | "Medium" | "High" {
   ].filter(Boolean).length;
 
   if (riskSignals >= 4) {
-    return "High";
+    return "HIGH";
   }
 
   if (riskSignals >= 2) {
-    return "Medium";
+    return "MEDIUM";
   }
 
-  return "Low";
+  return "LOW";
 }
 
 function changeManagementAnalysis(useCase: UseCase) {
@@ -157,7 +161,7 @@ function changeManagementAnalysis(useCase: UseCase) {
     );
   }
 
-  if (risk === "High") {
+  if (risk === "HIGH") {
     communicationPlan.push(
       "Hold targeted briefings with impacted teams before enabling production use."
     );
@@ -178,19 +182,19 @@ function changeManagementAnalysis(useCase: UseCase) {
 
 function executiveBriefing({
   useCase,
-  riskLevel,
-  finalRecommendation,
+  signals,
   controls,
   redFlags
 }: {
   useCase: UseCase;
-  riskLevel: string;
-  finalRecommendation: string;
+  signals: GovernanceSignals;
   controls: string[];
   redFlags: ReturnType<typeof detectRedFlags>;
 }) {
-  const recommendationLabel = formatEnumLabel(finalRecommendation).toLowerCase();
-  const riskLabel = formatEnumLabel(riskLevel).toLowerCase();
+  const recommendationLabel = formatEnumLabel(
+    signals.finalRecommendation
+  ).toLowerCase();
+  const riskLabel = formatEnumLabel(signals.riskLevel).toLowerCase();
   const topRisks =
     redFlags.length > 0
       ? redFlags.slice(0, 3).map((flag) => flag.issue)
@@ -203,17 +207,17 @@ function executiveBriefing({
         ];
 
   const suggestedNextStep =
-    riskLevel === "CRITICAL"
+    signals.riskLevel === "CRITICAL"
       ? "Hold a governance review before any pilot or production use."
-      : riskLevel === "HIGH"
+      : signals.riskLevel === "HIGH"
         ? "Run a controlled pilot only after confirming ownership, controls, and success measures."
-        : finalRecommendation === "APPROVED"
+        : signals.finalRecommendation === "APPROVED"
           ? "Proceed with a limited pilot and monitor quality, adoption, and exceptions."
           : "Confirm required controls, then decide whether to proceed with a limited pilot.";
 
   return {
     headline: `${useCase.title} is a ${riskLabel} proposal with a ${recommendationLabel} recommendation.`,
-    recommendationSummary: `The current assessment recommends ${recommendationLabel} because the proposal has ${riskLabel} governance risk and an AI readiness score that should guide pilot timing.`,
+    recommendationSummary: `The local fallback assessment recommends ${recommendationLabel} because deterministic guardrails identified ${riskLabel} governance risk and an AI readiness score of ${signals.aiReadinessScore}/100.`,
     expectedBusinessValue: `${useCase.expectedBenefit} Managers should validate this value through measurable pilot outcomes before scaling.`,
     topRisks,
     requiredControls: controls.slice(0, 3),
@@ -223,33 +227,63 @@ function executiveBriefing({
   };
 }
 
-export function generateGovernanceReport(
-  useCase: UseCase
-): GovernanceReportObject {
-  const redFlags = detectRedFlags(useCase);
-  const score = scoreGovernanceRisk(useCase, redFlags);
-  const finalRecommendation = recommendGovernanceDecision({
-    riskLevel: score.riskLevel,
-    aiReadinessScore: score.aiReadinessScore,
-    redFlags
-  });
+function proposalChallenger(signals: GovernanceSignals) {
+  return {
+    reasonsThisMightFail: [
+      "Users may not trust or consistently review AI-assisted outputs.",
+      "Pilot outcomes may not match the expected operational benefit.",
+      ...signals.guardrailWarnings.slice(0, 2)
+    ],
+    assumptionsToValidate: [
+      "The proposal has enough representative data for a controlled pilot.",
+      "Human reviewers have time and accountability to validate AI outputs.",
+      "Business value can be measured with clear pilot metrics."
+    ],
+    questionsForStakeholders: [
+      "Who owns final decisions and exception handling?",
+      "Which outcomes would stop or delay rollout?",
+      "What evidence is needed before scaling beyond the first pilot group?"
+    ]
+  };
+}
 
-  const controls = requiredControls(useCase, score.riskLevel);
+function successMetrics(useCase: UseCase) {
+  return [
+    "Pilot users complete review tasks with fewer manual steps.",
+    "AI-assisted outputs meet documented quality thresholds.",
+    "Reviewer overrides, escalations, and exceptions are tracked during pilot use.",
+    `${useCase.expectedBenefit} is validated with measured outcomes.`
+  ];
+}
+
+function assumptionsAndUncertainties(useCase: UseCase) {
+  return [
+    "The intake form is the only source of context for this fallback report.",
+    "Detailed data quality, integration effort, and operating procedures require confirmation.",
+    `Implementation timeline is stated as ${useCase.implementationTimeline}.`
+  ];
+}
+
+export function generateGovernanceReport(
+  useCase: UseCase,
+  signals = generateGovernanceSignals(useCase)
+): GovernanceReportObject {
+  const redFlags = signals.deterministicRedFlags;
+  const controls = requiredControls(useCase, signals.riskLevel);
 
   return {
     executiveSummary: `${useCase.title} is classified as a ${formatEnumLabel(
-      score.riskLevel
+      signals.riskLevel
     ).toLowerCase()} governance risk proposal with ${formatEnumLabel(
       useCase.dataSensitivity
     ).toLowerCase()} data and ${formatEnumLabel(
       useCase.decisionImpact
     ).toLowerCase()} decision impact. The deterministic review recommends ${formatEnumLabel(
-      finalRecommendation
-    ).toLowerCase()} at this stage.`,
+      signals.finalRecommendation
+    ).toLowerCase()} at this stage. This report was generated using local fallback analysis.`,
     executiveBriefing: executiveBriefing({
       useCase,
-      riskLevel: score.riskLevel,
-      finalRecommendation,
+      signals,
       controls,
       redFlags
     }),
@@ -306,8 +340,12 @@ export function generateGovernanceReport(
     ],
     redFlags,
     requiredControls: controls,
-    rolloutStrategy: rolloutStrategy(useCase, score.riskLevel),
+    rolloutStrategy: rolloutStrategy(useCase, signals.riskLevel),
     changeManagementAnalysis: changeManagementAnalysis(useCase),
+    stakeholderImpactAnalysis: `${useCase.affectedStakeholders} may experience changes to task flow, review responsibilities, and escalation expectations during pilot rollout.`,
+    proposalChallenger: proposalChallenger(signals),
+    successMetrics: successMetrics(useCase),
+    assumptionsAndUncertainties: assumptionsAndUncertainties(useCase),
     simulatedGovernanceReviews: [
       {
         reviewer: "IT Governance",
@@ -344,9 +382,13 @@ export function generateGovernanceReport(
         approvalConditions: ["Keep human review in place through the first rollout phase."]
       }
     ],
-    riskLevel: score.riskLevel,
-    aiReadinessScore: score.aiReadinessScore,
-    finalRecommendation,
-    confidenceLevel: score.confidenceLevel
+    generationMetadata: {
+      generationMode: "LOCAL_FALLBACK",
+      promptVersion: LOCAL_FALLBACK_PROMPT_VERSION
+    },
+    riskLevel: signals.riskLevel,
+    aiReadinessScore: signals.aiReadinessScore,
+    finalRecommendation: signals.finalRecommendation,
+    confidenceLevel: signals.confidenceLevel
   };
 }

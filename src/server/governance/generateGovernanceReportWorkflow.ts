@@ -13,7 +13,14 @@ import {
   getAzureGovernanceModel,
   isAzureGovernanceConfigured
 } from "./azureGovernanceReport";
-import { generateGovernanceReport } from "./generateGovernanceReport";
+import {
+  generateGovernanceReport,
+  LOCAL_FALLBACK_PROMPT_VERSION
+} from "./generateGovernanceReport";
+import {
+  generateGovernanceSignals,
+  type GovernanceSignals
+} from "./generateGovernanceSignals";
 import {
   governanceReportSchema,
   type GovernanceReportObject
@@ -23,19 +30,17 @@ import { buildReportGeneratedAuditNote } from "@/lib/audit-log-formatter";
 export type GovernanceGenerationResult = {
   reportRecord: GovernanceReport;
   report: GovernanceReportObject;
-  analysisMode: "azure" | "deterministic";
+  analysisMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
   fallbackReason: string | null;
   workflowRunId: string;
   workflowPath: string[];
 };
 
-const DETERMINISTIC_PROMPT_VERSION = "deterministic-governance-v1.0";
-
 const GovernanceGenerationState = Annotation.Root({
   useCase: Annotation<UseCase>(),
-  deterministicReport: Annotation<GovernanceReportObject | null>(),
+  signals: Annotation<GovernanceSignals | null>(),
   report: Annotation<GovernanceReportObject | null>(),
-  analysisMode: Annotation<"azure" | "deterministic">(),
+  analysisMode: Annotation<"AZURE_OPENAI" | "LOCAL_FALLBACK">(),
   fallbackReason: Annotation<string | null>(),
   promptVersion: Annotation<string>(),
   model: Annotation<string | null>(),
@@ -51,25 +56,25 @@ const GovernanceGenerationState = Annotation.Root({
 async function runDeterministicAnalysis(
   state: typeof GovernanceGenerationState.State
 ) {
-  const deterministicReport = generateGovernanceReport(state.useCase);
+  const signals = generateGovernanceSignals(state.useCase);
 
   return {
-    deterministicReport,
-    report: deterministicReport,
-    analysisMode: "deterministic" as const,
+    signals,
+    report: null,
+    analysisMode: "LOCAL_FALLBACK" as const,
     fallbackReason: null,
-    promptVersion: DETERMINISTIC_PROMPT_VERSION,
+    promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
     model: null,
     workflowPath: ["deterministic_analysis"]
   };
 }
 
 function routeAfterDeterministicAnalysis() {
-  return isAzureGovernanceConfigured() ? "azure_analysis" : "validate_report";
+  return isAzureGovernanceConfigured() ? "azure_analysis" : "local_fallback";
 }
 
 async function runAzureAnalysis(state: typeof GovernanceGenerationState.State) {
-  if (!state.deterministicReport) {
+  if (!state.signals) {
     return {
       workflowPath: ["azure_analysis_skipped"]
     };
@@ -78,24 +83,45 @@ async function runAzureAnalysis(state: typeof GovernanceGenerationState.State) {
   try {
     const report = await generateAzureGovernanceReport({
       useCase: state.useCase,
-      deterministicReport: state.deterministicReport
+      signals: state.signals
     });
 
     return {
       report,
-      analysisMode: "azure" as const,
+      analysisMode: "AZURE_OPENAI" as const,
       fallbackReason: null,
       promptVersion: GOVERNANCE_PROMPT_VERSION,
       model: getAzureGovernanceModel(),
       workflowPath: ["azure_analysis"]
     };
   } catch (error) {
+    const report = generateGovernanceReport(state.useCase, state.signals);
+
     return {
+      report,
+      analysisMode: "LOCAL_FALLBACK" as const,
       fallbackReason:
         error instanceof Error ? error.message : "Azure AI generation failed.",
+      promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
+      model: null,
       workflowPath: ["azure_analysis_failed"]
     };
   }
+}
+
+async function runLocalFallback(state: typeof GovernanceGenerationState.State) {
+  if (!state.signals) {
+    throw new Error("Cannot generate local fallback without governance signals.");
+  }
+
+  return {
+    report: generateGovernanceReport(state.useCase, state.signals),
+    analysisMode: "LOCAL_FALLBACK" as const,
+    fallbackReason: null,
+    promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
+    model: null,
+    workflowPath: ["local_fallback"]
+  };
 }
 
 async function validateReport(state: typeof GovernanceGenerationState.State) {
@@ -161,11 +187,13 @@ async function persistReport(state: typeof GovernanceGenerationState.State) {
 const governanceGenerationGraph = new StateGraph(GovernanceGenerationState)
   .addNode("deterministic_analysis", runDeterministicAnalysis)
   .addNode("azure_analysis", runAzureAnalysis)
+  .addNode("local_fallback", runLocalFallback)
   .addNode("validate_report", validateReport)
   .addNode("persist_report", persistReport)
   .addEdge(START, "deterministic_analysis")
   .addConditionalEdges("deterministic_analysis", routeAfterDeterministicAnalysis)
   .addEdge("azure_analysis", "validate_report")
+  .addEdge("local_fallback", "validate_report")
   .addEdge("validate_report", "persist_report")
   .addEdge("persist_report", END)
   .compile();
@@ -175,11 +203,11 @@ export async function generateGovernanceReportWithWorkflow(
 ): Promise<GovernanceGenerationResult> {
   const result = await governanceGenerationGraph.invoke({
     useCase,
-    deterministicReport: null,
+    signals: null,
     report: null,
-    analysisMode: "deterministic",
+    analysisMode: "LOCAL_FALLBACK",
     fallbackReason: null,
-    promptVersion: DETERMINISTIC_PROMPT_VERSION,
+    promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
     model: null,
     reportVersion: null,
     reportRecord: null,

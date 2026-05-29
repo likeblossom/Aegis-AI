@@ -1,4 +1,9 @@
 type AuditAction =
+  | "OPPORTUNITY_DISCOVERY_STARTED"
+  | "OPPORTUNITY_DISCOVERY_COMPLETED"
+  | "OPPORTUNITY_ANALYSIS_VIEWED"
+  | "OPPORTUNITY_DISCOVERY_RUN"
+  | "OPPORTUNITY_CONVERTED_TO_PROPOSAL"
   | "PROPOSAL_CREATED"
   | "REPORT_GENERATED"
   | "REVIEW_STATUS_UPDATED"
@@ -28,6 +33,11 @@ const enumLabels: Record<string, string> = {
 };
 
 const actionLabels: Record<AuditAction, string> = {
+  OPPORTUNITY_DISCOVERY_STARTED: "Opportunity Discovery Started",
+  OPPORTUNITY_DISCOVERY_COMPLETED: "Opportunity Discovery Completed",
+  OPPORTUNITY_ANALYSIS_VIEWED: "Opportunity Analysis Viewed",
+  OPPORTUNITY_DISCOVERY_RUN: "Opportunity Discovery Run",
+  OPPORTUNITY_CONVERTED_TO_PROPOSAL: "Opportunity Converted to Proposal",
   PROPOSAL_CREATED: "Proposal Created",
   REPORT_GENERATED: "Report Generated",
   REVIEW_STATUS_UPDATED: "Review Status Updated",
@@ -37,6 +47,11 @@ const actionLabels: Record<AuditAction, string> = {
 };
 
 const actionActors: Record<AuditAction, AuditActor> = {
+  OPPORTUNITY_DISCOVERY_STARTED: "proposalOwner",
+  OPPORTUNITY_DISCOVERY_COMPLETED: "ai",
+  OPPORTUNITY_ANALYSIS_VIEWED: "ai",
+  OPPORTUNITY_DISCOVERY_RUN: "ai",
+  OPPORTUNITY_CONVERTED_TO_PROPOSAL: "proposalOwner",
   PROPOSAL_CREATED: "proposalOwner",
   REPORT_GENERATED: "ai",
   REVIEW_STATUS_UPDATED: "reviewer",
@@ -74,21 +89,44 @@ export function buildProposalCreatedAuditNote() {
   return "Proposal submitted through intake form.";
 }
 
+export function buildOpportunityDiscoveryRunAuditNote() {
+  return "AI opportunity discovery completed.";
+}
+
+export function buildOpportunityDiscoveryStartedAuditNote() {
+  return "AI opportunity discovery started.";
+}
+
+export function buildOpportunityDiscoveryCompletedAuditNote() {
+  return "AI opportunity discovery completed.";
+}
+
+export function buildOpportunityAnalysisViewedAuditNote() {
+  return "Opportunity analysis reviewed.";
+}
+
+export function buildOpportunityConvertedAuditNote() {
+  return "Opportunity converted into governance proposal.";
+}
+
 export function buildReportGeneratedAuditNote({
-  riskLevel,
+  analysisMode,
   fallbackReason
 }: {
-  analysisMode: "azure" | "deterministic";
+  analysisMode: "AZURE_OPENAI" | "LOCAL_FALLBACK" | "azure" | "deterministic";
   reportVersion: number;
   riskLevel: string;
   fallbackReason: string | null;
 }) {
-  const riskLabel = `${formatAuditEnumLabel(riskLevel)} Risk`;
-  const fallbackSuffix = fallbackReason
-    ? " A deterministic assessment was used because AI analysis was unavailable."
-    : "";
+  if (analysisMode === "AZURE_OPENAI" || analysisMode === "azure") {
+    return "Governance report generated using Azure OpenAI with deterministic governance guardrails.";
+  }
 
-  return `Governance report generated. Initial assessment identified a ${riskLabel} rating requiring further review.${fallbackSuffix}`;
+  if (fallbackReason) {
+    return "Governance report generated using local fallback analysis after Azure OpenAI was unavailable.";
+  }
+
+  return "Governance report generated using local fallback analysis.";
 }
 
 export function buildReviewStatusUpdatedAuditNote({
@@ -144,16 +182,34 @@ export function formatAuditNoteForDisplay(action: string, note: string) {
 
   if (action === "REPORT_GENERATED") {
     const riskMatch = withoutWorkflowId.match(/\b(LOW|MEDIUM|HIGH|CRITICAL)\b/i);
+    const isFallback = /fallback|local fallback/i.test(withoutWorkflowId);
     return buildReportGeneratedAuditNote({
-      analysisMode: withoutWorkflowId.toLowerCase().includes("azure")
+      analysisMode: !isFallback && withoutWorkflowId.toLowerCase().includes("azure")
         ? "azure"
         : "deterministic",
       reportVersion: 1,
       riskLevel: riskMatch?.[1]?.toUpperCase() ?? "MEDIUM",
-      fallbackReason: withoutWorkflowId.toLowerCase().includes("fallback")
-        ? "fallback"
-        : null
+      fallbackReason: isFallback ? "fallback" : null
     });
+  }
+
+  if (
+    action === "OPPORTUNITY_DISCOVERY_RUN" ||
+    action === "OPPORTUNITY_DISCOVERY_COMPLETED"
+  ) {
+    return buildOpportunityDiscoveryCompletedAuditNote();
+  }
+
+  if (action === "OPPORTUNITY_DISCOVERY_STARTED") {
+    return buildOpportunityDiscoveryStartedAuditNote();
+  }
+
+  if (action === "OPPORTUNITY_ANALYSIS_VIEWED") {
+    return buildOpportunityAnalysisViewedAuditNote();
+  }
+
+  if (action === "OPPORTUNITY_CONVERTED_TO_PROPOSAL") {
+    return buildOpportunityConvertedAuditNote();
   }
 
   if (action === "REVIEW_STATUS_UPDATED") {

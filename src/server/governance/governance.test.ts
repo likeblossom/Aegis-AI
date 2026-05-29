@@ -4,6 +4,7 @@ import { reviewStatusSchema } from "@/lib/validations";
 import { detectRedFlags } from "./redFlags";
 import { recommendGovernanceDecision } from "./recommendationEngine";
 import { generateGovernanceReport } from "./generateGovernanceReport";
+import { generateGovernanceSignals } from "./generateGovernanceSignals";
 import { parseGovernanceReportJson } from "./reportTypes";
 import { scoreGovernanceRisk } from "./riskScoring";
 
@@ -206,7 +207,7 @@ describe("deterministic governance analysis", () => {
     expect(report.changeManagementAnalysis.affectedTeams).toContain(
       "Information Technology"
     );
-    expect(report.changeManagementAnalysis.adoptionRisk).toBe("High");
+    expect(report.changeManagementAnalysis.adoptionRisk).toBe("HIGH");
     expect(report.changeManagementAnalysis.expectedResistance.length).toBeGreaterThan(
       0
     );
@@ -217,6 +218,28 @@ describe("deterministic governance analysis", () => {
     expect(report.changeManagementAnalysis.mitigationActions.length).toBeGreaterThan(
       0
     );
+  });
+
+  it("produces deterministic signals for high-risk HR proposals", () => {
+    const signals = generateGovernanceSignals({
+      ...baseUseCase,
+      title: "Resume screening assistant",
+      department: "Human Resources",
+      proposedSolution: "Use AI to rank resumes for recruiter review.",
+      dataSensitivity: "SENSITIVE",
+      decisionImpact: "HIGH",
+      humanOversightPlanned: "PARTIAL"
+    });
+
+    expect(signals.riskLevel).toBe("CRITICAL");
+    expect(signals.finalRecommendation).toBe("NEEDS_REVIEW");
+    expect(
+      signals.deterministicRedFlags.some(
+        (flag) => flag.issue === "HR or applicant workflow"
+      )
+    ).toBe(true);
+    expect(signals.guardrailWarnings.length).toBeGreaterThan(0);
+    expect(signals.aiReadinessScore).toBeGreaterThan(0);
   });
 
   it("includes a concise executive briefing in generated reports", () => {
@@ -250,12 +273,13 @@ describe("deterministic governance analysis", () => {
     );
     expect(parsed?.changeManagementAnalysis).toEqual({
       affectedTeams: [],
-      adoptionRisk: "Low",
+      adoptionRisk: "LOW",
       expectedResistance: [],
       trainingNeeds: [],
       communicationPlan: [],
       mitigationActions: []
     });
+    expect(parsed?.generationMetadata.generationMode).toBe("LOCAL_FALLBACK");
   });
 
   it("validates review status updates without allowing pending", () => {
