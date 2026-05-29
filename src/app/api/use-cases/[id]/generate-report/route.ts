@@ -1,14 +1,8 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { auditLogs, governanceReports, useCases } from "@/db/schema";
-import {
-  GOVERNANCE_PROMPT_VERSION,
-  generateAzureGovernanceReport,
-  getAzureGovernanceModel,
-  isAzureGovernanceConfigured
-} from "@/server/governance/azureGovernanceReport";
-import { generateGovernanceReport } from "@/server/governance/generateGovernanceReport";
+import { useCases } from "@/db/schema";
+import { generateGovernanceReportWithWorkflow } from "@/server/governance/generateGovernanceReportWorkflow";
 
 export const runtime = "nodejs";
 
@@ -34,67 +28,32 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Use case not found" }, { status: 404 });
   }
 
-  const deterministicReport = generateGovernanceReport(proposal);
-  let report = deterministicReport;
-  let analysisMode: "azure" | "deterministic" = "deterministic";
-  let fallbackReason: string | null = null;
-  let promptVersion = "deterministic-governance-v1.0";
-  let model: string | null = null;
+  try {
+    const result = await generateGovernanceReportWithWorkflow(proposal);
 
-  if (isAzureGovernanceConfigured()) {
-    try {
-      report = await generateAzureGovernanceReport({
-        useCase: proposal,
-        deterministicReport
-      });
-      analysisMode = "azure";
-      promptVersion = GOVERNANCE_PROMPT_VERSION;
-      model = getAzureGovernanceModel();
-    } catch (error) {
-      fallbackReason =
-        error instanceof Error ? error.message : "Azure AI generation failed.";
-    }
+    return NextResponse.json(
+      {
+        reportRecord: result.reportRecord,
+        report: result.report,
+        analysisMode: result.analysisMode,
+        fallbackReason: result.fallbackReason,
+        workflowRunId: result.workflowRunId,
+        workflowPath: result.workflowPath
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Governance report generation failed", error);
+
+    return NextResponse.json(
+      {
+        error: "Governance report generation failed.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : "An unexpected workflow error occurred."
+      },
+      { status: 500 }
+    );
   }
-
-  const reportVersion =
-    db
-      .select()
-      .from(governanceReports)
-      .where(eq(governanceReports.useCaseId, proposal.id))
-      .all().length + 1;
-
-  const created = db
-    .insert(governanceReports)
-    .values({
-      useCaseId: proposal.id,
-      reportJson: JSON.stringify(report),
-      riskLevel: report.riskLevel,
-      aiReadinessScore: report.aiReadinessScore,
-      finalRecommendation: report.finalRecommendation,
-      confidenceLevel: report.confidenceLevel,
-      promptVersion,
-      generationProvider: analysisMode,
-      model,
-      reportVersion
-    })
-    .returning()
-    .get();
-
-  db.insert(auditLogs)
-    .values({
-      useCaseId: proposal.id,
-      action: "REPORT_GENERATED",
-      note:
-        analysisMode === "azure"
-          ? `Azure AI governance report v${reportVersion} generated with ${report.riskLevel} risk.`
-          : fallbackReason
-            ? `Deterministic fallback governance report v${reportVersion} generated with ${report.riskLevel} risk. Azure AI generation was unavailable.`
-            : `Deterministic governance report v${reportVersion} generated with ${report.riskLevel} risk.`
-    })
-    .run();
-
-  return NextResponse.json(
-    { reportRecord: created, report, analysisMode, fallbackReason },
-    { status: 201 }
-  );
 }

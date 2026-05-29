@@ -26,9 +26,11 @@ export function ReportActions({
   const [note, setNote] = useState("");
   const [reviewerName, setReviewerName] = useState("Governance reviewer");
   const [error, setError] = useState<string | null>(null);
+  const [generationNotice, setGenerationNotice] = useState<string | null>(null);
 
   async function generateReport() {
     setError(null);
+    setGenerationNotice(null);
     setIsGenerating(true);
 
     const response = await fetch(`/api/use-cases/${useCaseId}/generate-report`, {
@@ -38,10 +40,26 @@ export function ReportActions({
     setIsGenerating(false);
 
     if (!response.ok) {
-      setError("Could not generate the governance report.");
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        detail?: string;
+      } | null;
+      setError(body?.error ?? "Could not generate the governance report.");
       return;
     }
 
+    const body = (await response.json()) as {
+      analysisMode: "azure" | "deterministic";
+      fallbackReason: string | null;
+    };
+
+    setGenerationNotice(
+      body.analysisMode === "azure"
+        ? "Azure AI generated the latest governance report."
+        : body.fallbackReason
+          ? "Azure AI was unavailable, so the deterministic fallback generated the report."
+          : "The deterministic engine generated the report."
+    );
     router.refresh();
   }
 
@@ -79,6 +97,15 @@ export function ReportActions({
         >
           {isGenerating ? "Generating..." : "Generate governance report"}
         </button>
+        <p className="text-xs leading-5 text-muted">
+          Azure analysis can take several seconds. If Azure is unavailable, Aegis
+          saves a deterministic fallback report.
+        </p>
+        {generationNotice ? (
+          <p className="rounded-md border border-border bg-panel px-3 py-2 text-xs leading-5 text-muted">
+            {generationNotice}
+          </p>
+        ) : null}
 
         <form className="space-y-3" onSubmit={updateReviewStatus}>
           <label className="block text-sm font-medium text-ink">

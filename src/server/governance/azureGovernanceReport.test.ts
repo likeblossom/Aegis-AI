@@ -6,6 +6,8 @@ import {
   extractAzureMessageContent,
   getAzureApiVersion,
   getAzureGovernanceModel,
+  getAzureTimeoutMs,
+  isRetryableAzureStatus,
   isAzureGovernanceConfigured
 } from "./azureGovernanceReport";
 import { generateGovernanceReport } from "./generateGovernanceReport";
@@ -123,6 +125,24 @@ describe("Azure governance report integration helpers", () => {
     ).toBe("{\"ok\":true}");
 
     expect(extractAzureMessageContent({ choices: [] })).toBeNull();
+  });
+
+  it("identifies retryable Azure response statuses", () => {
+    expect(isRetryableAzureStatus(429)).toBe(true);
+    expect(isRetryableAzureStatus(500)).toBe(true);
+    expect(isRetryableAzureStatus(400)).toBe(false);
+  });
+
+  it("uses a default Azure timeout unless configured", () => {
+    const originalTimeout = process.env.AZURE_AI_TIMEOUT_MS;
+    delete process.env.AZURE_AI_TIMEOUT_MS;
+
+    expect(getAzureTimeoutMs()).toBe(30000);
+
+    process.env.AZURE_AI_TIMEOUT_MS = "12000";
+    expect(getAzureTimeoutMs()).toBe(12000);
+
+    restoreEnv("AZURE_AI_TIMEOUT_MS", originalTimeout);
   });
 });
 

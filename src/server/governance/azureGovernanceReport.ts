@@ -9,6 +9,8 @@ export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v1.0";
 const DEFAULT_AZURE_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21";
 const DEFAULT_AZURE_MODEL_INFERENCE_API_VERSION = "2025-04-01";
+const DEFAULT_AZURE_TIMEOUT_MS = 30000;
+const DEFAULT_AZURE_RETRY_COUNT = 1;
 
 type AzureChatCompletionsResponse = {
   choices?: Array<{
@@ -89,6 +91,15 @@ export function extractAzureMessageContent(body: AzureChatCompletionsResponse) {
   return typeof content === "string" ? content : null;
 }
 
+export function getAzureTimeoutMs() {
+  const value = Number(process.env.AZURE_AI_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_AZURE_TIMEOUT_MS;
+}
+
+export function isRetryableAzureStatus(status: number) {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
 export async function generateAzureGovernanceReport({
   useCase,
   deterministicReport
@@ -102,36 +113,68 @@ export async function generateAzureGovernanceReport({
     throw new Error("AZURE_AI_KEY is not configured.");
   }
 
-  const response = await fetch(buildAzureChatCompletionsUrl(), {
-    method: "POST",
-    headers: {
-      "api-key": apiKey,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(buildAzureChatCompletionsBody({ useCase, deterministicReport }))
-  });
+  const request = {
+    url: buildAzureChatCompletionsUrl(),
+    body: JSON.stringify(
+      buildAzureChatCompletionsBody({ useCase, deterministicReport })
+    )
+  };
 
-  const body = (await response.json().catch(() => null)) as
-    | AzureChatCompletionsResponse
-    | null;
+  let lastError: unknown = null;
 
-  if (!response.ok) {
-    throw new Error(
-      body?.error?.message ?? `Azure AI request failed with ${response.status}.`
-    );
+  for (let attempt = 0; attempt <= DEFAULT_AZURE_RETRY_COUNT; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(request.url, {
+        method: "POST",
+        headers: {
+          "api-key": apiKey,
+          "Content-Type": "application/json"
+        },
+        body: request.body
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | AzureChatCompletionsResponse
+        | null;
+
+      if (!response.ok) {
+        const message =
+          body?.error?.message ?? `Azure AI request failed with ${response.status}.`;
+
+        if (
+          attempt < DEFAULT_AZURE_RETRY_COUNT &&
+          isRetryableAzureStatus(response.status)
+        ) {
+          lastError = new Error(message);
+          continue;
+        }
+
+        throw new Error(message);
+      }
+
+      if (!body) {
+        throw new Error("Azure AI returned an empty response.");
+      }
+
+      const outputText = extractAzureMessageContent(body);
+
+      if (!outputText) {
+        throw new Error("Azure AI response did not include message content.");
+      }
+
+      return governanceReportSchema.parse(JSON.parse(outputText));
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= DEFAULT_AZURE_RETRY_COUNT) {
+        break;
+      }
+    }
   }
 
-  if (!body) {
-    throw new Error("Azure AI returned an empty response.");
-  }
-
-  const outputText = extractAzureMessageContent(body);
-
-  if (!outputText) {
-    throw new Error("Azure AI response did not include message content.");
-  }
-
-  return governanceReportSchema.parse(JSON.parse(outputText));
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Azure AI generation failed.");
 }
 
 export function buildAzureChatCompletionsBody({
@@ -143,45 +186,45 @@ export function buildAzureChatCompletionsBody({
 }) {
   return {
     ...(getAzureOpenAIDeployment() ? {} : { model: getAzureGovernanceModel() }),
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an enterprise AI governance analyst. Produce explainable, evidence-based governance analysis for internal AI use-case proposals. You support human reviewers and must not claim to be the final decision-maker. Return only valid JSON matching the requested schema."
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            promptVersion: GOVERNANCE_PROMPT_VERSION,
-            proposal: useCase,
-            deterministicSignals: {
-              redFlags: deterministicReport.redFlags,
-              riskLevel: deterministicReport.riskLevel,
-              aiReadinessScore: deterministicReport.aiReadinessScore,
-              finalRecommendation: deterministicReport.finalRecommendation,
-              confidenceLevel: deterministicReport.confidenceLevel
-            },
-            instructions: [
-              "Preserve the existing report structure exactly.",
-              "Use the deterministic red flags as required evidence, but expand the rationale and controls where useful.",
-              "Base findings only on the proposal and deterministic signals.",
-              "Keep recommendations practical for an early enterprise pilot.",
-              "Use concise paragraphs and concrete governance language.",
-              "Return JSON only."
-            ]
-          })
-        }
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "governance_report",
-          strict: true,
-          schema: governanceReportJsonSchema
-        }
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are an enterprise AI governance analyst. Produce explainable, evidence-based governance analysis for internal AI use-case proposals. You support human reviewers and must not claim to be the final decision-maker. Return only valid JSON matching the requested schema."
       },
-      temperature: 0.2,
-      max_tokens: 4000
+      {
+        role: "user",
+        content: JSON.stringify({
+          promptVersion: GOVERNANCE_PROMPT_VERSION,
+          proposal: useCase,
+          deterministicSignals: {
+            redFlags: deterministicReport.redFlags,
+            riskLevel: deterministicReport.riskLevel,
+            aiReadinessScore: deterministicReport.aiReadinessScore,
+            finalRecommendation: deterministicReport.finalRecommendation,
+            confidenceLevel: deterministicReport.confidenceLevel
+          },
+          instructions: [
+            "Preserve the existing report structure exactly.",
+            "Use the deterministic red flags as required evidence, but expand the rationale and controls where useful.",
+            "Base findings only on the proposal and deterministic signals.",
+            "Keep recommendations practical for an early enterprise pilot.",
+            "Use concise paragraphs and concrete governance language.",
+            "Return JSON only."
+          ]
+        })
+      }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "governance_report",
+        strict: true,
+        schema: governanceReportJsonSchema
+      }
+    },
+    temperature: 0.2,
+    max_tokens: 4000
   };
 }
 
@@ -193,6 +236,26 @@ function appendApiVersion(url: string, apiVersion: string) {
   return `${url}${url.includes("?") ? "&" : "?"}api-version=${encodeURIComponent(
     apiVersion
   )}`;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getAzureTimeoutMs());
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Azure AI request timed out after ${getAzureTimeoutMs()}ms.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 const rationaleItemSchema = {
