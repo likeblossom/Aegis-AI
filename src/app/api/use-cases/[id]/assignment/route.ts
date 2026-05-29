@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, useCases } from "@/db/schema";
+import { buildReviewerAssignedAuditNote } from "@/lib/audit-log-formatter";
 import { assignmentUpdateSchema } from "@/lib/validations";
 
 export const runtime = "nodejs";
@@ -38,6 +39,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Use case not found" }, { status: 404 });
   }
 
+  if (proposal.assignedReviewer === parsed.data.assignedReviewer) {
+    return NextResponse.json(proposal);
+  }
+
   const updated = db
     .update(useCases)
     .set({
@@ -52,7 +57,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     .values({
       useCaseId: numericId,
       action: "REVIEWER_ASSIGNED",
-      note: `Assigned reviewer changed from ${proposal.assignedReviewer} to ${parsed.data.assignedReviewer}.`
+      note: buildReviewerAssignedAuditNote({
+        previousReviewer: proposal.assignedReviewer,
+        newReviewer: parsed.data.assignedReviewer
+      })
     })
     .run();
 

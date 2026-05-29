@@ -1,5 +1,6 @@
 import { db } from "./index";
 import { auditLogs, governanceReports, reviewerNotes, useCases } from "./schema";
+import { buildProposalCreatedAuditNote } from "../lib/audit-log-formatter";
 
 const proposals = [
   {
@@ -108,7 +109,7 @@ for (const proposal of proposals) {
     .values({
       useCaseId: created.id,
       action: "PROPOSAL_CREATED",
-      note: "Proposal created."
+      note: buildProposalCreatedAuditNote()
     })
     .run();
 }

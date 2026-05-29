@@ -2,6 +2,7 @@ import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, useCases } from "@/db/schema";
+import { buildProposalCreatedAuditNote } from "@/lib/audit-log-formatter";
 import { DEFAULT_USE_CASE_STATUS } from "@/lib/constants";
 import { createUseCaseSchema } from "@/lib/validations";
 
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     .values({
       useCaseId: created.id,
       action: "PROPOSAL_CREATED",
-      note: "Proposal submitted through intake form."
+      note: buildProposalCreatedAuditNote()
     })
     .run();
 

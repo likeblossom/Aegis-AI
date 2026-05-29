@@ -167,6 +167,7 @@ const baseUseCase: UseCase = {
   humanOversightPlanned: "YES",
   affectedStakeholders: "Employees and service desk analysts",
   implementationTimeline: "4 weeks",
+  assignedReviewer: "IT Governance",
   status: "PENDING",
   createdAt: "2026-05-28 00:00:00",
   updatedAt: "2026-05-28 00:00:00"

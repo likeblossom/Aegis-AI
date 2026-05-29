@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Aegis",
+  title: "Aegis-AI",
   description: "AI governance and use-case evaluation platform"
 };
 

@@ -18,6 +18,7 @@ import {
   governanceReportSchema,
   type GovernanceReportObject
 } from "./reportTypes";
+import { buildReportGeneratedAuditNote } from "@/lib/audit-log-formatter";
 
 export type GovernanceGenerationResult = {
   reportRecord: GovernanceReport;
@@ -141,12 +142,11 @@ async function persistReport(state: typeof GovernanceGenerationState.State) {
     .values({
       useCaseId: state.useCase.id,
       action: "REPORT_GENERATED",
-      note: buildAuditNote({
+      note: buildReportGeneratedAuditNote({
         analysisMode: state.analysisMode,
         reportVersion,
         riskLevel: state.report.riskLevel,
-        fallbackReason: state.fallbackReason,
-        workflowRunId: state.workflowRunId
+        fallbackReason: state.fallbackReason
       })
     })
     .run();
@@ -156,32 +156,6 @@ async function persistReport(state: typeof GovernanceGenerationState.State) {
     reportRecord,
     workflowPath: ["persist_report"]
   };
-}
-
-function buildAuditNote({
-  analysisMode,
-  reportVersion,
-  riskLevel,
-  fallbackReason,
-  workflowRunId
-}: {
-  analysisMode: "azure" | "deterministic";
-  reportVersion: number;
-  riskLevel: string;
-  fallbackReason: string | null;
-  workflowRunId: string;
-}) {
-  const prefix = `[workflow ${workflowRunId}] `;
-
-  if (analysisMode === "azure") {
-    return `${prefix}Azure AI governance report v${reportVersion} generated with ${riskLevel} risk.`;
-  }
-
-  if (fallbackReason) {
-    return `${prefix}Deterministic fallback governance report v${reportVersion} generated with ${riskLevel} risk. Azure AI generation was unavailable.`;
-  }
-
-  return `${prefix}Deterministic governance report v${reportVersion} generated with ${riskLevel} risk.`;
 }
 
 const governanceGenerationGraph = new StateGraph(GovernanceGenerationState)

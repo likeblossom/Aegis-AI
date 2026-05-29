@@ -2,6 +2,10 @@ import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, governanceReports, reviewerNotes, useCases } from "@/db/schema";
+import {
+  buildReviewNoteAddedAuditNote,
+  buildReviewStatusUpdatedAuditNote
+} from "@/lib/audit-log-formatter";
 import { reviewUpdateSchema } from "@/lib/validations";
 import { validateReviewWorkflow } from "@/server/governance/workflowControls";
 
@@ -73,7 +77,10 @@ export async function POST(request: Request, context: RouteContext) {
     .values({
       useCaseId: numericId,
       action: "REVIEW_STATUS_UPDATED",
-      note: `Review status updated from ${proposal.status} to ${parsed.data.status}.`
+      note: buildReviewStatusUpdatedAuditNote({
+        previousStatus: proposal.status,
+        newStatus: parsed.data.status
+      })
     })
     .run();
 
@@ -91,7 +98,7 @@ export async function POST(request: Request, context: RouteContext) {
       .values({
         useCaseId: numericId,
         action: "REVIEW_NOTE_ADDED",
-        note: `Reviewer note added for ${parsed.data.status}.`
+        note: buildReviewNoteAddedAuditNote(parsed.data.note)
       })
       .run();
   }

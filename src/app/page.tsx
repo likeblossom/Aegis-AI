@@ -60,19 +60,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <section className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-normal text-ink">
-            Aegis
+            Aegis-AI
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
             AI Governance & Use-Case Evaluation Platform for collecting proposed
             AI initiatives and tracking review status.
           </p>
         </div>
-        <Link
-          className="inline-flex w-fit rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-          href="/use-cases/new"
-        >
-          New proposal
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            className="inline-flex w-fit rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-panel"
+            href="/portfolio"
+          >
+            Portfolio priorities
+          </Link>
+          <Link
+            className="inline-flex w-fit rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+            href="/use-cases/new"
+          >
+            New proposal
+          </Link>
+        </div>
       </section>
 
       <div className="space-y-5">

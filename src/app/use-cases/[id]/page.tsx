@@ -14,6 +14,11 @@ import {
   reviewerNotes,
   useCases
 } from "@/db/schema";
+import {
+  formatAuditActionLabel,
+  formatAuditNoteForDisplay,
+  getAuditActorLabel
+} from "@/lib/audit-log-formatter";
 import { formatEnumLabel } from "@/lib/constants";
 import { parseGovernanceReportJson } from "@/server/governance/reportTypes";
 
@@ -174,10 +179,13 @@ export default async function UseCaseDetailPage({
               {logs.map((log) => (
                 <li key={log.id} className="border-l-2 border-border pl-4">
                   <p className="text-sm font-medium text-ink">
-                    {formatEnumLabel(log.action)}
+                    {formatAuditActionLabel(log.action)}
                   </p>
-                  <p className="mt-1 text-sm text-muted">{log.note}</p>
+                  <p className="mt-1 text-sm text-muted">
+                    {formatAuditNoteForDisplay(log.action, log.note)}
+                  </p>
                   <p className="mt-1 text-xs text-muted">
+                    {getAuditActorLabel(log.action)} |{" "}
                     {new Date(`${log.createdAt}Z`).toLocaleString()}
                   </p>
                 </li>

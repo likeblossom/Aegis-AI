@@ -20,6 +20,7 @@ const baseUseCase: UseCase = {
   humanOversightPlanned: "YES",
   affectedStakeholders: "Employees and service desk analysts",
   implementationTimeline: "4 weeks",
+  assignedReviewer: "IT Governance",
   status: "PENDING",
   createdAt: "2026-05-28 00:00:00",
   updatedAt: "2026-05-28 00:00:00"
@@ -55,7 +56,108 @@ describe("deterministic governance analysis", () => {
     const score = scoreGovernanceRisk(useCase, detectRedFlags(useCase));
 
     expect(score.riskLevel).toBe("CRITICAL");
+    expect(score.aiReadinessScore).toBeGreaterThanOrEqual(0);
+    expect(score.aiReadinessScore).toBeLessThanOrEqual(100);
+  });
+
+  it("separates high AI readiness from high governance risk", () => {
+    const useCase = {
+      ...baseUseCase,
+      title: "Resume screening assistant",
+      department: "Human Resources",
+      teamOwner: "Talent Operations",
+      currentProcess:
+        "Recruiters use a documented workflow, ATS records, historical resumes, and standard hiring criteria for initial review.",
+      proposedSolution:
+        "Use AI to rank resumes and recommend candidates for recruiter review, with human review before any decision.",
+      expectedBenefit:
+        "Reduce screening time while preserving documented recruiter accountability.",
+      dataSensitivity: "SENSITIVE",
+      decisionImpact: "HIGH",
+      humanOversightPlanned: "PARTIAL",
+      affectedStakeholders:
+        "Applicants, recruiters, hiring managers, HR compliance, and talent operations",
+      implementationTimeline: "8 weeks",
+      assignedReviewer: "HR Governance"
+    };
+
+    const score = scoreGovernanceRisk(useCase, detectRedFlags(useCase));
+
+    expect(score.riskLevel).toBe("CRITICAL");
+    expect(score.aiReadinessScore).toBeGreaterThanOrEqual(70);
+    expect(score.aiReadinessScore).toBeLessThanOrEqual(80);
+  });
+
+  it("scores high AI readiness with low governance risk", () => {
+    const useCase = {
+      ...baseUseCase,
+      currentProcess:
+        "Service desk analysts use a documented workflow, existing FAQ documents, ticket records, and a standard review checklist.",
+      proposedSolution:
+        "Use AI to summarize approved FAQ entries and draft responses for analyst review.",
+      expectedBenefit:
+        "Reduce repeat support effort while improving consistency in documented answers.",
+      dataSensitivity: "INTERNAL",
+      decisionImpact: "LOW",
+      humanOversightPlanned: "YES",
+      affectedStakeholders:
+        "Employees, service desk analysts, knowledge managers, and IT operations",
+      implementationTimeline: "6 weeks",
+      assignedReviewer: "IT Governance"
+    };
+
+    const score = scoreGovernanceRisk(useCase, detectRedFlags(useCase));
+
+    expect(score.riskLevel).toBe("LOW");
+    expect(score.aiReadinessScore).toBeGreaterThanOrEqual(75);
+  });
+
+  it("scores low AI readiness with high governance risk", () => {
+    const useCase = {
+      ...baseUseCase,
+      title: "Automated candidate rejection",
+      department: "Human Resources",
+      teamOwner: "Talent Operations",
+      currentProcess:
+        "The current process is ad hoc and undefined with missing data and no documented criteria.",
+      proposedSolution:
+        "Use a fully automated system to reject candidates without human review.",
+      expectedBenefit: "Speed up hiring decisions.",
+      dataSensitivity: "SENSITIVE",
+      decisionImpact: "HIGH",
+      humanOversightPlanned: "NO",
+      affectedStakeholders: "Applicants",
+      implementationTimeline: "TBD",
+      assignedReviewer: "Unassigned"
+    };
+
+    const score = scoreGovernanceRisk(useCase, detectRedFlags(useCase));
+
+    expect(score.riskLevel).toBe("CRITICAL");
     expect(score.aiReadinessScore).toBeLessThan(45);
+  });
+
+  it("scores low AI readiness with low governance risk", () => {
+    const useCase = {
+      ...baseUseCase,
+      title: "Internal document helper",
+      currentProcess:
+        "The current process is ad hoc with unknown data sources and no documented workflow.",
+      proposedSolution:
+        "Explore whether AI could help employees with non-sensitive internal notes.",
+      expectedBenefit: "Potential productivity benefit.",
+      dataSensitivity: "PUBLIC",
+      decisionImpact: "LOW",
+      humanOversightPlanned: "YES",
+      affectedStakeholders: "Employees",
+      implementationTimeline: "Unknown",
+      assignedReviewer: "Unassigned"
+    };
+
+    const score = scoreGovernanceRisk(useCase, detectRedFlags(useCase));
+
+    expect(score.riskLevel).toBe("LOW");
+    expect(score.aiReadinessScore).toBeLessThan(50);
   });
 
   it("maps low-risk proposals to approval and high-risk proposals to review", () => {

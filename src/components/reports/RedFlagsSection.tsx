@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatEnumLabel } from "@/lib/constants";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { RedFlag } from "@/server/governance/reportTypes";
 
 type RedFlagsSectionProps = {
@@ -24,9 +24,7 @@ export function RedFlagsSection({ redFlags }: RedFlagsSectionProps) {
           <div key={flag.issue} className="rounded-md border border-border p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <p className="font-medium text-ink">{flag.issue}</p>
-              <span className="w-fit rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-ink">
-                {formatEnumLabel(flag.severity)}
-              </span>
+              <StatusBadge value={flag.severity} />
             </div>
             <p className="mt-2 text-sm leading-6 text-muted">{flag.explanation}</p>
           </div>

@@ -98,7 +98,7 @@ export function ReportActions({
           {isGenerating ? "Generating..." : "Generate governance report"}
         </button>
         <p className="text-xs leading-5 text-muted">
-          Azure analysis can take several seconds. If Azure is unavailable, Aegis
+          Azure analysis can take several seconds. If Azure is unavailable, Aegis-AI
           saves a deterministic fallback report.
         </p>
         {generationNotice ? (

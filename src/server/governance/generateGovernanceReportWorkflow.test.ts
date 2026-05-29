@@ -65,6 +65,17 @@ describe("generateGovernanceReportWithWorkflow", () => {
       "persist_report"
     ]);
 
+    const reportAuditLog = db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.useCaseId, useCase.id))
+      .get();
+
+    expect(reportAuditLog?.note).toBe(
+      "Governance report generated. Initial assessment identified a Low Risk rating requiring further review."
+    );
+    expect(reportAuditLog?.note).not.toContain(result.workflowRunId);
+
     restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
     restoreEnv("AZURE_AI_KEY", originalKey);
   });

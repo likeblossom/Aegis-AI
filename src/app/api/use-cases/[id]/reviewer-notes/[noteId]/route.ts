@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, reviewerNotes } from "@/db/schema";
+import { buildReviewNoteUpdatedAuditNote } from "@/lib/audit-log-formatter";
 import { reviewerNoteUpdateSchema } from "@/lib/validations";
 
 export const runtime = "nodejs";
@@ -59,7 +60,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     .values({
       useCaseId: numericId,
       action: "REVIEW_NOTE_UPDATED",
-      note: `Reviewer note ${numericNoteId} was updated.`
+      note: buildReviewNoteUpdatedAuditNote(parsed.data.note)
     })
     .run();
 
