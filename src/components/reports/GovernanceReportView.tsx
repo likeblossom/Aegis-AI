@@ -1,6 +1,10 @@
 import type { GovernanceReport } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
 import type { GovernanceReportObject } from "@/server/governance/reportTypes";
+import {
+  AssessmentBreakdown,
+  AssessmentExecutiveSummary
+} from "./AssessmentBreakdown";
 import { ChangeManagementImpact } from "./ChangeManagementImpact";
 import { ExecutiveBriefing } from "./ExecutiveBriefing";
 import { RationaleSection } from "./RationaleSection";
@@ -70,6 +74,10 @@ export function GovernanceReportView({
       </div>
 
       <div className="mt-5">
+        <AssessmentExecutiveSummary assessment={report.assessmentBreakdown} />
+      </div>
+
+      <div className="mt-5">
         <RiskBreakdown
           aiReadinessScore={report.aiReadinessScore}
           confidenceLevel={report.confidenceLevel}
@@ -122,6 +130,8 @@ export function GovernanceReportView({
         </section>
 
         <RedFlagsSection redFlags={report.redFlags} />
+
+        <AssessmentBreakdown assessment={report.assessmentBreakdown} />
 
         <section>
           <h3 className="text-base font-semibold text-ink">Required controls</h3>

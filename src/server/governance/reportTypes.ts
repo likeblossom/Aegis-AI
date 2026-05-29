@@ -46,6 +46,24 @@ export type ExecutiveBriefing = {
   decisionQuestion: string;
 };
 
+export type AssessmentArea = {
+  score: number;
+  rationale: string;
+  evidenceFromProposal: string[];
+  improvementActions: string[];
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+};
+
+export type AssessmentBreakdown = {
+  businessValue: AssessmentArea;
+  implementationComplexity: AssessmentArea;
+  governanceRisk: AssessmentArea;
+  changeManagementRisk: AssessmentArea;
+  dataReadiness: AssessmentArea;
+  humanOversightStrength: AssessmentArea;
+  strategicAlignment: AssessmentArea;
+};
+
 export type ProposalChallenger = {
   reasonsThisMightFail: string[];
   assumptionsToValidate: string[];
@@ -75,6 +93,7 @@ export type GovernanceReportObject = {
   rolloutStrategy: string[];
   changeManagementAnalysis: ChangeManagementAnalysis;
   stakeholderImpactAnalysis: string;
+  assessmentBreakdown: AssessmentBreakdown;
   proposalChallenger: ProposalChallenger;
   successMetrics: string[];
   assumptionsAndUncertainties: string[];
@@ -161,6 +180,47 @@ const executiveBriefingSchema = z
       "Should this proposal be refreshed with the current report format?"
   });
 
+const assessmentAreaSchema = z.object({
+  score: z.number().int().min(0).max(100),
+  rationale: z.string(),
+  evidenceFromProposal: z.array(z.string()).min(1),
+  improvementActions: z.array(z.string()).min(1),
+  confidence: z.enum(["LOW", "MEDIUM", "HIGH"])
+});
+
+const defaultAssessmentArea: AssessmentArea = {
+  score: 50,
+  rationale:
+    "This legacy report was generated before detailed assessment scoring was available.",
+  evidenceFromProposal: [
+    "Regenerate the report to extract proposal-specific assessment evidence."
+  ],
+  improvementActions: [
+    "Regenerate the governance report using the current assessment framework."
+  ],
+  confidence: "LOW"
+};
+
+const assessmentBreakdownSchema = z
+  .object({
+    businessValue: assessmentAreaSchema,
+    implementationComplexity: assessmentAreaSchema,
+    governanceRisk: assessmentAreaSchema,
+    changeManagementRisk: assessmentAreaSchema,
+    dataReadiness: assessmentAreaSchema,
+    humanOversightStrength: assessmentAreaSchema,
+    strategicAlignment: assessmentAreaSchema
+  })
+  .default({
+    businessValue: defaultAssessmentArea,
+    implementationComplexity: defaultAssessmentArea,
+    governanceRisk: defaultAssessmentArea,
+    changeManagementRisk: defaultAssessmentArea,
+    dataReadiness: defaultAssessmentArea,
+    humanOversightStrength: defaultAssessmentArea,
+    strategicAlignment: defaultAssessmentArea
+  });
+
 export const governanceReportSchema = z.object({
   executiveSummary: z.string(),
   executiveBriefing: executiveBriefingSchema,
@@ -185,6 +245,7 @@ export const governanceReportSchema = z.object({
   rolloutStrategy: z.array(z.string()),
   changeManagementAnalysis: changeManagementAnalysisSchema,
   stakeholderImpactAnalysis: z.string().default(""),
+  assessmentBreakdown: assessmentBreakdownSchema,
   proposalChallenger: proposalChallengerSchema,
   successMetrics: z.array(z.string()).default([]),
   assumptionsAndUncertainties: z.array(z.string()).default([]),

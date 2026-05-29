@@ -6,6 +6,7 @@ type AuditAction =
   | "OPPORTUNITY_CONVERTED_TO_PROPOSAL"
   | "PROPOSAL_CREATED"
   | "REPORT_GENERATED"
+  | "ASSESSMENT_BREAKDOWN_GENERATED"
   | "REVIEW_STATUS_UPDATED"
   | "REVIEW_NOTE_ADDED"
   | "REVIEW_NOTE_UPDATED"
@@ -40,6 +41,7 @@ const actionLabels: Record<AuditAction, string> = {
   OPPORTUNITY_CONVERTED_TO_PROPOSAL: "Opportunity Converted to Proposal",
   PROPOSAL_CREATED: "Proposal Created",
   REPORT_GENERATED: "Report Generated",
+  ASSESSMENT_BREAKDOWN_GENERATED: "Assessment Breakdown Generated",
   REVIEW_STATUS_UPDATED: "Review Status Updated",
   REVIEW_NOTE_ADDED: "Review Note Added",
   REVIEW_NOTE_UPDATED: "Review Note Updated",
@@ -54,6 +56,7 @@ const actionActors: Record<AuditAction, AuditActor> = {
   OPPORTUNITY_CONVERTED_TO_PROPOSAL: "proposalOwner",
   PROPOSAL_CREATED: "proposalOwner",
   REPORT_GENERATED: "ai",
+  ASSESSMENT_BREAKDOWN_GENERATED: "ai",
   REVIEW_STATUS_UPDATED: "reviewer",
   REVIEW_NOTE_ADDED: "reviewer",
   REVIEW_NOTE_UPDATED: "reviewer",
@@ -129,6 +132,10 @@ export function buildReportGeneratedAuditNote({
   return "Governance report generated using local fallback analysis.";
 }
 
+export function buildAssessmentBreakdownGeneratedAuditNote() {
+  return "Detailed AI assessment breakdown generated.";
+}
+
 export function buildReviewStatusUpdatedAuditNote({
   previousStatus,
   newStatus
@@ -191,6 +198,10 @@ export function formatAuditNoteForDisplay(action: string, note: string) {
       riskLevel: riskMatch?.[1]?.toUpperCase() ?? "MEDIUM",
       fallbackReason: isFallback ? "fallback" : null
     });
+  }
+
+  if (action === "ASSESSMENT_BREAKDOWN_GENERATED") {
+    return buildAssessmentBreakdownGeneratedAuditNote();
   }
 
   if (

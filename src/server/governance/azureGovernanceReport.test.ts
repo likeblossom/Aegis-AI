@@ -5,6 +5,7 @@ import {
   buildAzureChatCompletionsBody,
   buildAzureChatCompletionsUrl,
   extractAzureMessageContent,
+  generateAzureGovernanceReport,
   getAzureApiVersion,
   getAzureGovernanceModel,
   getAzureTimeoutMs,
@@ -119,7 +120,58 @@ describe("Azure governance report integration helpers", () => {
     expect(bodyText).toContain("deterministicSignals");
     expect(bodyText).toContain("guardrailWarnings");
     expect(bodyText).toContain("Preserve deterministic riskLevel exactly");
+    expect(bodyText).toContain("assessmentBreakdown");
+    expect(bodyText).toContain("proposal-specific evidence");
 
+    restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
+  });
+
+  it("parses Azure assessment breakdown output and reapplies guardrails", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    const originalDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const originalFetch = global.fetch;
+    const signals = generateGovernanceSignals(baseUseCase);
+    const azureReport = {
+      ...generateGovernanceReport(baseUseCase),
+      generationMetadata: {
+        generationMode: "AZURE_OPENAI" as const,
+        modelDeployment: "governance-model",
+        promptVersion: "governance-analysis-azure-v2.1"
+      }
+    };
+
+    process.env.AZURE_AI_ENDPOINT = "https://example.openai.azure.com";
+    process.env.AZURE_AI_KEY = "test-key";
+    process.env.AZURE_OPENAI_DEPLOYMENT = "governance-model";
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(azureReport) } }]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    const report = await generateAzureGovernanceReport({
+      useCase: baseUseCase,
+      signals
+    });
+
+    expect(report.assessmentBreakdown.businessValue.score).toBeGreaterThanOrEqual(
+      0
+    );
+    expect(report.assessmentBreakdown.businessValue.score).toBeLessThanOrEqual(100);
+    expect(
+      report.assessmentBreakdown.businessValue.evidenceFromProposal[0]
+    ).toContain(baseUseCase.expectedBenefit);
+    expect(
+      report.assessmentBreakdown.businessValue.improvementActions.length
+    ).toBeGreaterThan(0);
+    expect(report.riskLevel).toBe(signals.riskLevel);
+
+    global.fetch = originalFetch;
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
     restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
   });
 

@@ -264,6 +264,202 @@ function assumptionsAndUncertainties(useCase: UseCase) {
   ];
 }
 
+function clampScore(score: number) {
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function confidenceFromSpecificity(useCase: UseCase): "LOW" | "MEDIUM" | "HIGH" {
+  const proposalText = [
+    useCase.currentProcess,
+    useCase.proposedSolution,
+    useCase.expectedBenefit,
+    useCase.affectedStakeholders,
+    useCase.implementationTimeline
+  ].join(" ");
+  const hasMeasuredOutcome = /\b(\d+%|\d+\s*(hour|hours|day|days|week|weeks)|cost|save|reduce|faster|time)\b/i.test(
+    proposalText
+  );
+  const hasOperationalDetail = /\b(workflow|process|review|documented|ticket|meeting|record|checklist|source)\b/i.test(
+    proposalText
+  );
+
+  if (hasMeasuredOutcome && hasOperationalDetail) {
+    return "HIGH";
+  }
+
+  return proposalText.length > 180 ? "MEDIUM" : "LOW";
+}
+
+function assessmentBreakdown(
+  useCase: UseCase,
+  signals: GovernanceSignals,
+  controls: string[]
+): GovernanceReportObject["assessmentBreakdown"] {
+  const confidence = confidenceFromSpecificity(useCase);
+  const hasDocumentedProcess = includesAny(useCase.currentProcess, [
+    "documented",
+    "standard",
+    "checklist",
+    "records",
+    "ticket",
+    "approved",
+    "workflow"
+  ]);
+  const hasDataQualityDetail = includesAny(useCase.currentProcess, [
+    "records",
+    "documents",
+    "approved",
+    "historical",
+    "data",
+    "ticket"
+  ]);
+  const integrationComplexity = includesAny(useCase.proposedSolution, [
+    "integrate",
+    "integration",
+    "system",
+    "workflow",
+    "automated",
+    "approval"
+  ]);
+  const compressedTimeline = includesAny(useCase.implementationTimeline, [
+    "1 week",
+    "2 weeks",
+    "3 weeks",
+    "4 weeks"
+  ]);
+  const oversightScore =
+    useCase.humanOversightPlanned === "YES"
+      ? 85
+      : useCase.humanOversightPlanned === "PARTIAL"
+        ? 55
+        : 20;
+  const riskScoreByLevel = {
+    LOW: 82,
+    MEDIUM: 65,
+    HIGH: 42,
+    CRITICAL: 20
+  }[signals.riskLevel];
+  const changeRiskScore =
+    adoptionRisk(useCase) === "LOW" ? 80 : adoptionRisk(useCase) === "MEDIUM" ? 58 : 35;
+  const dataReadinessScore = clampScore(
+    45 +
+      (hasDocumentedProcess ? 20 : 0) +
+      (hasDataQualityDetail ? 20 : 0) +
+      (["PUBLIC", "INTERNAL"].includes(useCase.dataSensitivity) ? 10 : -5)
+  );
+  const implementationScore = clampScore(
+    78 -
+      (integrationComplexity ? 14 : 0) -
+      (compressedTimeline ? 8 : 0) -
+      (useCase.decisionImpact === "HIGH" ? 12 : 0) -
+      (["CONFIDENTIAL", "SENSITIVE"].includes(useCase.dataSensitivity) ? 10 : 0)
+  );
+
+  return {
+    businessValue: {
+      score: clampScore(62 + (useCase.expectedBenefit.length > 35 ? 16 : 6)),
+      rationale:
+        "The proposal identifies a concrete operational benefit, but the value case still needs pilot metrics to prove measurable efficiency or service improvement.",
+      evidenceFromProposal: [
+        `Expected benefit: ${useCase.expectedBenefit}`,
+        `Current process: ${useCase.currentProcess}`
+      ],
+      improvementActions: [
+        "Define baseline cycle time, effort, quality, and user satisfaction metrics before the pilot starts.",
+        "Set a target improvement threshold that must be met before scaling beyond the pilot group."
+      ],
+      confidence
+    },
+    implementationComplexity: {
+      score: implementationScore,
+      rationale:
+        "Complexity is driven by the proposed operating change, implementation timeline, data sensitivity, and whether the workflow affects higher-impact decisions.",
+      evidenceFromProposal: [
+        `Proposed solution: ${useCase.proposedSolution}`,
+        `Implementation timeline: ${useCase.implementationTimeline}`
+      ],
+      improvementActions: [
+        "Create a pilot implementation plan that names systems, data sources, integration points, owners, and approval gates.",
+        "Start with a limited workflow slice before connecting the AI output to downstream operational systems."
+      ],
+      confidence
+    },
+    governanceRisk: {
+      score: riskScoreByLevel,
+      rationale:
+        "The governance score reflects deterministic risk signals from data sensitivity, decision impact, human oversight, and any red flags.",
+      evidenceFromProposal: [
+        `Data sensitivity: ${formatEnumLabel(useCase.dataSensitivity)}`,
+        `Decision impact: ${formatEnumLabel(useCase.decisionImpact)}`,
+        `Human oversight planned: ${formatEnumLabel(useCase.humanOversightPlanned)}`
+      ],
+      improvementActions: controls.slice(0, 3),
+      confidence: signals.confidenceLevel
+    },
+    changeManagementRisk: {
+      score: changeRiskScore,
+      rationale:
+        "The adoption score reflects the number of stakeholder groups affected, likely workflow changes, training needs, and perceived accountability concerns.",
+      evidenceFromProposal: [
+        `Affected stakeholders: ${useCase.affectedStakeholders}`,
+        `Current process: ${useCase.currentProcess}`
+      ],
+      improvementActions: [
+        "Publish a short operating procedure that explains when users should accept, edit, reject, or escalate AI output.",
+        "Run stakeholder training before pilot launch and collect adoption feedback during the first rollout phase."
+      ],
+      confidence
+    },
+    dataReadiness: {
+      score: dataReadinessScore,
+      rationale:
+        "Data readiness is stronger when the current process references known records, documents, approved sources, or a repeatable workflow.",
+      evidenceFromProposal: [
+        `Current process: ${useCase.currentProcess}`,
+        `Data sensitivity: ${formatEnumLabel(useCase.dataSensitivity)}`
+      ],
+      improvementActions: [
+        "Inventory the approved data sources, owners, access permissions, retention rules, and quality checks required for the pilot.",
+        "Test the AI workflow on representative historical examples before live use."
+      ],
+      confidence
+    },
+    humanOversightStrength: {
+      score: oversightScore,
+      rationale:
+        "Oversight strength depends on whether the proposal keeps a human reviewer accountable before AI-assisted outputs influence operations.",
+      evidenceFromProposal: [
+        `Human oversight planned: ${formatEnumLabel(useCase.humanOversightPlanned)}`,
+        `Decision impact: ${formatEnumLabel(useCase.decisionImpact)}`
+      ],
+      improvementActions: [
+        "Introduce mandatory human review of AI-generated outputs before they are used for stakeholder communication or operational decisions.",
+        "Define escalation criteria and assign a named owner for reviewer overrides and exceptions."
+      ],
+      confidence: useCase.humanOversightPlanned === "YES" ? "HIGH" : "MEDIUM"
+    },
+    strategicAlignment: {
+      score: clampScore(
+        60 +
+          (useCase.expectedBenefit.length > 35 ? 12 : 0) +
+          (hasDocumentedProcess ? 8 : 0) +
+          (signals.aiReadinessScore >= 70 ? 8 : 0)
+      ),
+      rationale:
+        "Strategic alignment is strongest where the proposal connects an existing business workflow to measurable continuous improvement and sustainable operating value.",
+      evidenceFromProposal: [
+        `Department: ${useCase.department}`,
+        `Expected benefit: ${useCase.expectedBenefit}`
+      ],
+      improvementActions: [
+        "Connect the pilot objective to a department-level goal, service metric, or continuous improvement target.",
+        "Define the long-term owner responsible for monitoring value, quality, and governance controls after rollout."
+      ],
+      confidence
+    }
+  };
+}
+
 export function generateGovernanceReport(
   useCase: UseCase,
   signals = generateGovernanceSignals(useCase)
@@ -343,6 +539,7 @@ export function generateGovernanceReport(
     rolloutStrategy: rolloutStrategy(useCase, signals.riskLevel),
     changeManagementAnalysis: changeManagementAnalysis(useCase),
     stakeholderImpactAnalysis: `${useCase.affectedStakeholders} may experience changes to task flow, review responsibilities, and escalation expectations during pilot rollout.`,
+    assessmentBreakdown: assessmentBreakdown(useCase, signals, controls),
     proposalChallenger: proposalChallenger(signals),
     successMetrics: successMetrics(useCase),
     assumptionsAndUncertainties: assumptionsAndUncertainties(useCase),

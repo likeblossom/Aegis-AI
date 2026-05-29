@@ -5,7 +5,7 @@ import {
   type GovernanceReportObject
 } from "./reportTypes";
 
-export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v2.0";
+export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v2.1";
 
 const DEFAULT_AZURE_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21";
@@ -208,7 +208,13 @@ export function buildAzureChatCompletionsBody({
           proposal: useCase,
           deterministicSignals: signals,
           instructions: [
-            "Generate the full structured governance report. Azure OpenAI is responsible for stakeholder-facing narrative, rationale, controls, rollout, executive briefing, challenger analysis, success metrics, assumptions, and change-management analysis.",
+            "Generate the full structured governance report. Azure OpenAI is responsible for stakeholder-facing narrative, rationale, controls, rollout, executive briefing, challenger analysis, success metrics, assumptions, change-management analysis, and assessmentBreakdown.",
+            "assessmentBreakdown must evaluate businessValue, implementationComplexity, governanceRisk, changeManagementRisk, dataReadiness, humanOversightStrength, and strategicAlignment.",
+            "For every assessment area, provide a 0-100 score, a distinct rationale, proposal-specific evidence, actionable improvement actions, and confidence.",
+            "Evidence must quote or closely reference actual proposal content from fields such as currentProcess, proposedSolution, expectedBenefit, affectedStakeholders, implementationTimeline, dataSensitivity, decisionImpact, and humanOversightPlanned.",
+            "Do not use generic evidence such as 'the proposal mentions governance' unless the specific proposal text is included.",
+            "Improvement actions must be concrete actions a team can implement, such as mandatory human review, named owners, pilot metrics, data-source inventory, escalation criteria, or approval checkpoints.",
+            "Avoid generic consulting language and do not repeat the same rationale across assessment categories.",
             "Preserve deterministic riskLevel exactly.",
             "Preserve deterministic finalRecommendation exactly.",
             "Preserve deterministic aiReadinessScore and confidenceLevel exactly.",
@@ -388,6 +394,56 @@ const executiveBriefingSchema = {
   }
 };
 
+const assessmentAreaSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "score",
+    "rationale",
+    "evidenceFromProposal",
+    "improvementActions",
+    "confidence"
+  ],
+  properties: {
+    score: { type: "integer", minimum: 0, maximum: 100 },
+    rationale: { type: "string" },
+    evidenceFromProposal: {
+      type: "array",
+      minItems: 1,
+      items: { type: "string" }
+    },
+    improvementActions: {
+      type: "array",
+      minItems: 1,
+      items: { type: "string" }
+    },
+    confidence: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] }
+  }
+};
+
+const assessmentBreakdownSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "businessValue",
+    "implementationComplexity",
+    "governanceRisk",
+    "changeManagementRisk",
+    "dataReadiness",
+    "humanOversightStrength",
+    "strategicAlignment"
+  ],
+  properties: {
+    businessValue: assessmentAreaSchema,
+    implementationComplexity: assessmentAreaSchema,
+    governanceRisk: assessmentAreaSchema,
+    changeManagementRisk: assessmentAreaSchema,
+    dataReadiness: assessmentAreaSchema,
+    humanOversightStrength: assessmentAreaSchema,
+    strategicAlignment: assessmentAreaSchema
+  }
+};
+
 const generationMetadataSchema = {
   type: "object",
   additionalProperties: false,
@@ -417,6 +473,7 @@ const governanceReportJsonSchema = {
     "rolloutStrategy",
     "changeManagementAnalysis",
     "stakeholderImpactAnalysis",
+    "assessmentBreakdown",
     "proposalChallenger",
     "successMetrics",
     "assumptionsAndUncertainties",
@@ -454,6 +511,7 @@ const governanceReportJsonSchema = {
     rolloutStrategy: { type: "array", items: { type: "string" } },
     changeManagementAnalysis: changeManagementAnalysisSchema,
     stakeholderImpactAnalysis: { type: "string" },
+    assessmentBreakdown: assessmentBreakdownSchema,
     proposalChallenger: proposalChallengerSchema,
     successMetrics: { type: "array", items: { type: "string" } },
     assumptionsAndUncertainties: { type: "array", items: { type: "string" } },

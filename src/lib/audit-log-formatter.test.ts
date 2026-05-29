@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAssessmentBreakdownGeneratedAuditNote,
   buildReportGeneratedAuditNote,
   buildOpportunityConvertedAuditNote,
   buildOpportunityDiscoveryRunAuditNote,
@@ -31,6 +32,10 @@ describe("audit-log-formatter", () => {
         fallbackReason: null
       })
     ).toBe("Governance report generated using local fallback analysis.");
+
+    expect(buildAssessmentBreakdownGeneratedAuditNote()).toBe(
+      "Detailed AI assessment breakdown generated."
+    );
   });
 
   it("converts review status enum values to labels", () => {
@@ -85,6 +90,13 @@ describe("audit-log-formatter", () => {
 
     expect(
       formatAuditNoteForDisplay(
+        "ASSESSMENT_BREAKDOWN_GENERATED",
+        "internal assessment debug"
+      )
+    ).toBe("Detailed AI assessment breakdown generated.");
+
+    expect(
+      formatAuditNoteForDisplay(
         "REVIEW_STATUS_UPDATED",
         "Review status updated from PENDING to NEEDS_REVIEW."
       )
@@ -100,6 +112,9 @@ describe("audit-log-formatter", () => {
 
   it("returns actor labels for audit sources", () => {
     expect(getAuditActorLabel("REPORT_GENERATED")).toBe("AI Analysis Engine");
+    expect(getAuditActorLabel("ASSESSMENT_BREAKDOWN_GENERATED")).toBe(
+      "AI Analysis Engine"
+    );
     expect(getAuditActorLabel("REVIEW_NOTE_ADDED")).toBe("Reviewer");
     expect(getAuditActorLabel("PROPOSAL_CREATED")).toBe("Proposal Owner");
   });

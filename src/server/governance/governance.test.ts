@@ -5,7 +5,7 @@ import { detectRedFlags } from "./redFlags";
 import { recommendGovernanceDecision } from "./recommendationEngine";
 import { generateGovernanceReport } from "./generateGovernanceReport";
 import { generateGovernanceSignals } from "./generateGovernanceSignals";
-import { parseGovernanceReportJson } from "./reportTypes";
+import { governanceReportSchema, parseGovernanceReportJson } from "./reportTypes";
 import { scoreGovernanceRisk } from "./riskScoring";
 
 const baseUseCase: UseCase = {
@@ -194,6 +194,69 @@ describe("deterministic governance analysis", () => {
     expect(parseGovernanceReportJson("{not valid")).toBeNull();
   });
 
+  it("validates assessment breakdown scores and required detail", () => {
+    const report = generateGovernanceReport(baseUseCase);
+
+    expect(governanceReportSchema.safeParse(report).success).toBe(true);
+
+    expect(
+      governanceReportSchema.safeParse({
+        ...report,
+        assessmentBreakdown: {
+          ...report.assessmentBreakdown,
+          businessValue: {
+            ...report.assessmentBreakdown.businessValue,
+            score: 101
+          }
+        }
+      }).success
+    ).toBe(false);
+
+    expect(
+      governanceReportSchema.safeParse({
+        ...report,
+        assessmentBreakdown: {
+          ...report.assessmentBreakdown,
+          businessValue: {
+            ...report.assessmentBreakdown.businessValue,
+            evidenceFromProposal: []
+          }
+        }
+      }).success
+    ).toBe(false);
+
+    expect(
+      governanceReportSchema.safeParse({
+        ...report,
+        assessmentBreakdown: {
+          ...report.assessmentBreakdown,
+          businessValue: {
+            ...report.assessmentBreakdown.businessValue,
+            improvementActions: []
+          }
+        }
+      }).success
+    ).toBe(false);
+  });
+
+  it("generates proposal-specific assessment evidence and actions in fallback reports", () => {
+    const report = generateGovernanceReport(baseUseCase);
+    const areas = Object.values(report.assessmentBreakdown);
+
+    expect(areas.every((area) => area.evidenceFromProposal.length > 0)).toBe(true);
+    expect(areas.every((area) => area.improvementActions.length > 0)).toBe(true);
+    expect(
+      report.assessmentBreakdown.businessValue.evidenceFromProposal.some((item) =>
+        item.includes(baseUseCase.expectedBenefit)
+      )
+    ).toBe(true);
+    expect(
+      report.assessmentBreakdown.humanOversightStrength.improvementActions.some(
+        (item) => item.toLowerCase().includes("human review")
+      )
+    ).toBe(true);
+  });
+
   it("includes change management impact analysis in generated reports", () => {
     const report = generateGovernanceReport({
       ...baseUseCase,
@@ -263,6 +326,7 @@ describe("deterministic governance analysis", () => {
     const {
       executiveBriefing: _executiveBriefing,
       changeManagementAnalysis: _changeManagementAnalysis,
+      assessmentBreakdown: _assessmentBreakdown,
       ...legacyReport
     } = report;
 
@@ -280,6 +344,9 @@ describe("deterministic governance analysis", () => {
       mitigationActions: []
     });
     expect(parsed?.generationMetadata.generationMode).toBe("LOCAL_FALLBACK");
+    expect(parsed?.assessmentBreakdown.businessValue.evidenceFromProposal.length).toBe(
+      1
+    );
   });
 
   it("validates review status updates without allowing pending", () => {

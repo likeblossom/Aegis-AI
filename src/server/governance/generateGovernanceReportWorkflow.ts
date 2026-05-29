@@ -25,7 +25,10 @@ import {
   governanceReportSchema,
   type GovernanceReportObject
 } from "./reportTypes";
-import { buildReportGeneratedAuditNote } from "@/lib/audit-log-formatter";
+import {
+  buildAssessmentBreakdownGeneratedAuditNote,
+  buildReportGeneratedAuditNote
+} from "@/lib/audit-log-formatter";
 
 export type GovernanceGenerationResult = {
   reportRecord: GovernanceReport;
@@ -174,6 +177,14 @@ async function persistReport(state: typeof GovernanceGenerationState.State) {
         riskLevel: state.report.riskLevel,
         fallbackReason: state.fallbackReason
       })
+    })
+    .run();
+
+  db.insert(auditLogs)
+    .values({
+      useCaseId: state.useCase.id,
+      action: "ASSESSMENT_BREAKDOWN_GENERATED",
+      note: buildAssessmentBreakdownGeneratedAuditNote()
     })
     .run();
 

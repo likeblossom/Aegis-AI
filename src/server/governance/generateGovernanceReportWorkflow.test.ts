@@ -66,16 +66,25 @@ describe("generateGovernanceReportWithWorkflow", () => {
       "persist_report"
     ]);
 
-    const reportAuditLog = db
+    const reportAuditLogs = db
       .select()
       .from(auditLogs)
       .where(eq(auditLogs.useCaseId, useCase.id))
-      .get();
+      .all();
+    const reportAuditLog = reportAuditLogs.find(
+      (log) => log.action === "REPORT_GENERATED"
+    );
+    const assessmentAuditLog = reportAuditLogs.find(
+      (log) => log.action === "ASSESSMENT_BREAKDOWN_GENERATED"
+    );
 
     expect(reportAuditLog?.note).toBe(
       "Governance report generated using local fallback analysis."
     );
     expect(reportAuditLog?.note).not.toContain(result.workflowRunId);
+    expect(assessmentAuditLog?.note).toBe(
+      "Detailed AI assessment breakdown generated."
+    );
 
     restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
     restoreEnv("AZURE_AI_KEY", originalKey);
