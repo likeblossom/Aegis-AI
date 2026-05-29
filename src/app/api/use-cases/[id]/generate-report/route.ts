@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, governanceReports, useCases } from "@/db/schema";
+import {
+  generateAzureGovernanceReport,
+  isAzureGovernanceConfigured
+} from "@/server/governance/azureGovernanceReport";
 import { generateGovernanceReport } from "@/server/governance/generateGovernanceReport";
 
 export const runtime = "nodejs";
@@ -28,7 +32,24 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Use case not found" }, { status: 404 });
   }
 
-  const report = generateGovernanceReport(proposal);
+  const deterministicReport = generateGovernanceReport(proposal);
+  let report = deterministicReport;
+  let analysisMode: "azure" | "deterministic" = "deterministic";
+  let fallbackReason: string | null = null;
+
+  if (isAzureGovernanceConfigured()) {
+    try {
+      report = await generateAzureGovernanceReport({
+        useCase: proposal,
+        deterministicReport
+      });
+      analysisMode = "azure";
+    } catch (error) {
+      fallbackReason =
+        error instanceof Error ? error.message : "Azure AI generation failed.";
+    }
+  }
+
   const created = db
     .insert(governanceReports)
     .values({
@@ -46,9 +67,17 @@ export async function POST(_request: Request, context: RouteContext) {
     .values({
       useCaseId: proposal.id,
       action: "REPORT_GENERATED",
-      note: `Deterministic governance report generated with ${report.riskLevel} risk.`
+      note:
+        analysisMode === "azure"
+          ? `Azure AI governance report generated with ${report.riskLevel} risk.`
+          : fallbackReason
+            ? `Deterministic fallback governance report generated with ${report.riskLevel} risk. Azure AI generation was unavailable.`
+            : `Deterministic governance report generated with ${report.riskLevel} risk.`
     })
     .run();
 
-  return NextResponse.json({ reportRecord: created, report }, { status: 201 });
+  return NextResponse.json(
+    { reportRecord: created, report, analysisMode, fallbackReason },
+    { status: 201 }
+  );
 }
