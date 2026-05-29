@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createUseCaseSchema, reviewUpdateSchema } from "@/lib/validations";
+import {
+  assignmentUpdateSchema,
+  createUseCaseSchema,
+  reviewerNoteUpdateSchema,
+  reviewUpdateSchema
+} from "@/lib/validations";
 
 const validProposal = {
   title: "Internal FAQ summarization",
@@ -45,5 +50,31 @@ describe("reviewUpdateSchema", () => {
     expect(reviewUpdateSchema.safeParse({ status: "PENDING" }).success).toBe(
       false
     );
+  });
+});
+
+describe("assignmentUpdateSchema", () => {
+  it("accepts an assigned reviewer name", () => {
+    expect(
+      assignmentUpdateSchema.safeParse({ assignedReviewer: "Privacy Office" })
+        .success
+    ).toBe(true);
+  });
+
+  it("rejects blank reviewer assignments", () => {
+    expect(assignmentUpdateSchema.safeParse({ assignedReviewer: "" }).success).toBe(
+      false
+    );
+  });
+});
+
+describe("reviewerNoteUpdateSchema", () => {
+  it("requires note text when editing reviewer notes", () => {
+    expect(
+      reviewerNoteUpdateSchema.safeParse({
+        note: "",
+        reviewerName: "Governance reviewer"
+      }).success
+    ).toBe(false);
   });
 });

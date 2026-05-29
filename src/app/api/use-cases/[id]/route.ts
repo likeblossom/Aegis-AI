@@ -34,12 +34,14 @@ export async function GET(_request: Request, context: RouteContext) {
     .where(eq(auditLogs.useCaseId, numericId))
     .all();
 
-  const reportRecord = db
+  const reportRecords = db
     .select()
     .from(governanceReports)
     .where(eq(governanceReports.useCaseId, numericId))
     .orderBy(desc(governanceReports.createdAt))
-    .get();
+    .all();
+
+  const reportRecord = reportRecords[0] ?? null;
 
   const notes = db
     .select()
@@ -57,6 +59,7 @@ export async function GET(_request: Request, context: RouteContext) {
           ...reportRecord,
           report: parseGovernanceReportJson(reportRecord.reportJson)
         }
-      : null
+      : null,
+    governanceReports: reportRecords
   });
 }

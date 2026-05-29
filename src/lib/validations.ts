@@ -30,6 +30,23 @@ export const reviewUpdateSchema = z.object({
     .default("Governance reviewer")
 });
 
+export const assignmentUpdateSchema = z.object({
+  assignedReviewer: z
+    .string()
+    .trim()
+    .min(1, "Assigned reviewer is required")
+    .max(120)
+});
+
+export const reviewerNoteUpdateSchema = z.object({
+  note: z.string().trim().min(1, "Reviewer note is required").max(2000),
+  reviewerName: z
+    .string()
+    .trim()
+    .min(1, "Reviewer name is required")
+    .max(120)
+});
+
 export const createUseCaseSchema = z.object({
   title: requiredText.max(160),
   department: requiredText.max(120),
@@ -48,3 +65,5 @@ export type CreateUseCaseInput = z.infer<typeof createUseCaseSchema>;
 export type UseCaseStatus = z.infer<typeof useCaseStatusSchema>;
 export type ReviewStatus = z.infer<typeof reviewStatusSchema>;
 export type ReviewUpdateInput = z.infer<typeof reviewUpdateSchema>;
+export type AssignmentUpdateInput = z.infer<typeof assignmentUpdateSchema>;
+export type ReviewerNoteUpdateInput = z.infer<typeof reviewerNoteUpdateSchema>;

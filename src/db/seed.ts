@@ -16,7 +16,8 @@ const proposals = [
     decisionImpact: "LOW",
     humanOversightPlanned: "YES",
     affectedStakeholders: "Employees, IT service desk analysts",
-    implementationTimeline: "Pilot within 4 weeks"
+    implementationTimeline: "Pilot within 4 weeks",
+    assignedReviewer: "IT Governance"
   },
   {
     title: "Internal meeting transcript summarization",
@@ -32,7 +33,8 @@ const proposals = [
     decisionImpact: "LOW",
     humanOversightPlanned: "YES",
     affectedStakeholders: "Project managers, meeting participants, operations leadership",
-    implementationTimeline: "Trial during next quarterly planning cycle"
+    implementationTimeline: "Trial during next quarterly planning cycle",
+    assignedReviewer: "Operations Governance"
   },
   {
     title: "Job applicant screening",
@@ -48,7 +50,8 @@ const proposals = [
     decisionImpact: "HIGH",
     humanOversightPlanned: "PARTIAL",
     affectedStakeholders: "Applicants, recruiters, hiring managers, HR compliance",
-    implementationTimeline: "Desired pilot next quarter"
+    implementationTimeline: "Desired pilot next quarter",
+    assignedReviewer: "HR Compliance"
   },
   {
     title: "Vendor approval automation",
@@ -64,7 +67,8 @@ const proposals = [
     decisionImpact: "HIGH",
     humanOversightPlanned: "PARTIAL",
     affectedStakeholders: "Procurement, legal, finance, business requesters, vendors",
-    implementationTimeline: "Phased rollout over 3 months"
+    implementationTimeline: "Phased rollout over 3 months",
+    assignedReviewer: "Legal and Procurement Risk"
   },
   {
     title: "Supplier onboarding document summarization",
@@ -80,7 +84,8 @@ const proposals = [
     decisionImpact: "MEDIUM",
     humanOversightPlanned: "YES",
     affectedStakeholders: "Suppliers, onboarding specialists, compliance reviewers",
-    implementationTimeline: "Pilot with one supplier category in 6 weeks"
+    implementationTimeline: "Pilot with one supplier category in 6 weeks",
+    assignedReviewer: "Supply Chain Compliance"
   }
 ] as const;
 

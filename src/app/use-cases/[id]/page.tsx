@@ -2,6 +2,9 @@ import { asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { GovernanceReportView } from "@/components/reports/GovernanceReportView";
 import { ReportActions } from "@/components/reports/ReportActions";
+import { ReportHistory } from "@/components/reports/ReportHistory";
+import { ReviewerAssignmentForm } from "@/components/reports/ReviewerAssignmentForm";
+import { ReviewerNotesList } from "@/components/reports/ReviewerNotesList";
 import { BackLink, PageShell } from "@/components/ui/page-shell";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { db } from "@/db";
@@ -19,13 +22,22 @@ export const runtime = "nodejs";
 
 type DetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ reportId?: string }>;
 };
 
-export default async function UseCaseDetailPage({ params }: DetailPageProps) {
+export default async function UseCaseDetailPage({
+  params,
+  searchParams
+}: DetailPageProps) {
   const { id } = await params;
+  const { reportId } = await searchParams;
   const numericId = Number(id);
+  const selectedReportId = reportId ? Number(reportId) : null;
 
-  if (!Number.isInteger(numericId)) {
+  if (
+    !Number.isInteger(numericId) ||
+    (reportId !== undefined && !Number.isInteger(selectedReportId))
+  ) {
     notFound();
   }
 
@@ -46,12 +58,21 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
     .orderBy(asc(auditLogs.createdAt))
     .all();
 
-  const reportRecord = db
+  const reportRecords = db
     .select()
     .from(governanceReports)
     .where(eq(governanceReports.useCaseId, proposal.id))
     .orderBy(desc(governanceReports.createdAt))
-    .get();
+    .all();
+
+  const latestReportRecord = reportRecords[0] ?? null;
+  const reportRecord = selectedReportId
+    ? reportRecords.find((record) => record.id === selectedReportId)
+    : latestReportRecord;
+
+  if (selectedReportId && !reportRecord) {
+    notFound();
+  }
 
   const report = reportRecord
     ? parseGovernanceReportJson(reportRecord.reportJson)
@@ -83,6 +104,10 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
             <h2 className="text-lg font-semibold text-ink">Proposal details</h2>
             <dl className="mt-5 grid gap-5">
               <DetailItem label="Team owner" value={proposal.teamOwner} />
+              <DetailItem
+                label="Assigned reviewer"
+                value={proposal.assignedReviewer}
+              />
               <DetailItem label="Current process" value={proposal.currentProcess} />
               <DetailItem
                 label="Proposed AI solution"
@@ -112,39 +137,36 @@ export default async function UseCaseDetailPage({ params }: DetailPageProps) {
             </dl>
           </section>
 
-          <GovernanceReportView report={report} reportRecord={reportRecord} />
+          <GovernanceReportView
+            report={report}
+            reportLabel={
+              reportRecord?.id === latestReportRecord?.id
+                ? "Latest report"
+                : "Historical report"
+            }
+            reportRecord={reportRecord}
+          />
         </div>
 
         <aside className="space-y-6">
-          <ReportActions
-            currentStatus={proposal.status}
-            hasReport={Boolean(reportRecord)}
+          <ReviewerAssignmentForm
+            assignedReviewer={proposal.assignedReviewer}
             useCaseId={proposal.id}
           />
 
-          <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-ink">Reviewer notes</h2>
-            {notes.length === 0 ? (
-              <p className="mt-3 text-sm leading-6 text-muted">
-                No reviewer notes have been added yet.
-              </p>
-            ) : (
-              <ol className="mt-4 space-y-4">
-                {notes.map((note) => (
-                  <li key={note.id} className="border-l-2 border-border pl-4">
-                    <p className="text-sm font-medium text-ink">
-                      {formatEnumLabel(note.status)}
-                    </p>
-                    <p className="mt-1 text-sm text-muted">{note.note}</p>
-                    <p className="mt-1 text-xs text-muted">
-                      {note.reviewerName} -{" "}
-                      {new Date(`${note.createdAt}Z`).toLocaleString()}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+          <ReportActions
+            currentStatus={proposal.status}
+            hasReport={Boolean(latestReportRecord)}
+            useCaseId={proposal.id}
+          />
+
+          <ReviewerNotesList notes={notes} useCaseId={proposal.id} />
+
+          <ReportHistory
+            reports={reportRecords}
+            selectedReportId={reportRecord?.id ?? null}
+            useCaseId={proposal.id}
+          />
 
           <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-ink">Audit log</h2>

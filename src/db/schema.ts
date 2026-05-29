@@ -14,6 +14,7 @@ export const useCases = sqliteTable("use_cases", {
   humanOversightPlanned: text("human_oversight_planned").notNull(),
   affectedStakeholders: text("affected_stakeholders").notNull(),
   implementationTimeline: text("implementation_timeline").notNull(),
+  assignedReviewer: text("assigned_reviewer").notNull().default("Unassigned"),
   status: text("status").notNull().default("PENDING"),
   createdAt: text("created_at")
     .notNull()
@@ -66,6 +67,9 @@ export const reviewerNotes = sqliteTable("reviewer_notes", {
   note: text("note").notNull(),
   reviewerName: text("reviewer_name").notNull().default("Governance reviewer"),
   createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`)
 });

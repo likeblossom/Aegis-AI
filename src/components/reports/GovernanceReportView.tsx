@@ -10,11 +10,13 @@ import { SimulatedReviews } from "./SimulatedReviews";
 type GovernanceReportViewProps = {
   report: GovernanceReportObject | null;
   reportRecord?: GovernanceReport | null;
+  reportLabel?: string;
 };
 
 export function GovernanceReportView({
   report,
-  reportRecord
+  reportRecord,
+  reportLabel = "Latest report"
 }: GovernanceReportViewProps) {
   if (!report) {
     return (
@@ -36,7 +38,7 @@ export function GovernanceReportView({
           <h2 className="text-lg font-semibold text-ink">Governance analysis</h2>
           {reportRecord ? (
             <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted">
-              Latest report - Version {reportRecord.reportVersion} -{" "}
+              {reportLabel} - Version {reportRecord.reportVersion} -{" "}
               {formatEnumLabel(reportRecord.generationProvider)} -{" "}
               {reportRecord.promptVersion}
               {reportRecord.model ? ` - ${reportRecord.model}` : ""}

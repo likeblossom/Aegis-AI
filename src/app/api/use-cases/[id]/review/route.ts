@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { auditLogs, governanceReports, reviewerNotes, useCases } from "@/db/schema";
@@ -43,6 +43,7 @@ export async function POST(request: Request, context: RouteContext) {
     .select()
     .from(governanceReports)
     .where(eq(governanceReports.useCaseId, numericId))
+    .orderBy(desc(governanceReports.createdAt))
     .get();
 
   const workflowError = validateReviewWorkflow({

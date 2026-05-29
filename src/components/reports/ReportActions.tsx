@@ -145,7 +145,7 @@ export function ReportActions({
             </p>
           ) : null}
           <button
-            className="w-full rounded-md border border-border bg-panel px-4 py-2.5 text-sm font-semibold text-ink hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isReviewing}
             type="submit"
           >

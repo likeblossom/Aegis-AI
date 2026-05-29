@@ -24,6 +24,7 @@ export function ProposalTable({ proposals }: ProposalTableProps) {
             <tr>
               <th className="px-4 py-3 font-semibold">Title</th>
               <th className="px-4 py-3 font-semibold">Department</th>
+              <th className="px-4 py-3 font-semibold">Reviewer</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Data</th>
               <th className="px-4 py-3 font-semibold">Decision</th>
@@ -38,6 +39,9 @@ export function ProposalTable({ proposals }: ProposalTableProps) {
                   {proposal.title}
                 </td>
                 <td className="px-4 py-4 text-muted">{proposal.department}</td>
+                <td className="px-4 py-4 text-muted">
+                  {proposal.assignedReviewer}
+                </td>
                 <td className="px-4 py-4">
                   <StatusBadge value={proposal.status} />
                 </td>
