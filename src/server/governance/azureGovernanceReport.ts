@@ -299,6 +299,7 @@ export function buildAzureChatCompletionsBody({
           expectedGenerationMetadata: {
             generationMode: "AZURE_OPENAI",
             fallbackUsed: false,
+            failureReason: null,
             azureDeployment: getAzureGovernanceModel(),
             apiVersion: getAzureApiVersion(),
             modelDeployment: getAzureGovernanceModel(),
@@ -332,6 +333,7 @@ export function buildAzureChatCompletionsBody({
             "Keep explanations concise, business-oriented, and practical for an early enterprise pilot.",
             "Set generationMetadata.generationMode to AZURE_OPENAI.",
             "Set generationMetadata.fallbackUsed to false.",
+            "Set generationMetadata.failureReason to null for successful Azure reports.",
             "Set generationMetadata.azureDeployment to the configured model or deployment name.",
             "Set generationMetadata.apiVersion to the configured Azure API version.",
             "Set generationMetadata.modelDeployment to the configured model or deployment name.",
@@ -585,6 +587,7 @@ const generationMetadataSchema = {
   required: [
     "generationMode",
     "fallbackUsed",
+    "failureReason",
     "azureDeployment",
     "apiVersion",
     "modelDeployment",
@@ -597,8 +600,9 @@ const generationMetadataSchema = {
     },
     fallbackUsed: { type: "boolean" },
     failureReason: {
-      type: "string",
+      type: ["string", "null"],
       enum: [
+        null,
         "AZURE_NOT_CONFIGURED",
         "AZURE_UNAUTHORIZED",
         "AZURE_FORBIDDEN",

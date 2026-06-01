@@ -157,15 +157,15 @@ const generationMetadataSchema = z
   .object({
     generationMode: z.enum(["AZURE_OPENAI", "LOCAL_FALLBACK"]),
     fallbackUsed: z.boolean().optional(),
-    failureReason: z
-      .preprocess(
-        (value) =>
-          value === "UNKNOWN_ERROR" || value === "AZURE_REQUEST_FAILED"
+    failureReason: z.preprocess(
+      (value) =>
+        value === null
+          ? undefined
+          : value === "UNKNOWN_ERROR" || value === "AZURE_REQUEST_FAILED"
             ? "AZURE_UNKNOWN_ERROR"
             : value,
-        z.enum(GENERATION_FAILURE_REASONS)
-      )
-      .optional(),
+      z.enum(GENERATION_FAILURE_REASONS).optional()
+    ),
     azureDeployment: z.string().optional(),
     apiVersion: z.string().optional(),
     modelDeployment: z.string().optional(),

@@ -131,6 +131,27 @@ describe("Azure governance report integration helpers", () => {
     restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
   });
 
+  it("requires every generation metadata schema property for Azure structured outputs", () => {
+    const body = buildAzureChatCompletionsBody({
+      useCase: baseUseCase,
+      signals: generateGovernanceSignals(baseUseCase)
+    });
+    const schema = body.response_format.json_schema.schema;
+    const generationMetadataSchema =
+      schema.properties.generationMetadata as {
+        required: string[];
+        properties: Record<string, unknown>;
+      };
+
+    expect(generationMetadataSchema.required.sort()).toEqual(
+      Object.keys(generationMetadataSchema.properties).sort()
+    );
+    expect(generationMetadataSchema.required).toContain("failureReason");
+    expect(JSON.stringify(generationMetadataSchema.properties.failureReason)).toContain(
+      "null"
+    );
+  });
+
   it("parses Azure assessment breakdown output and reapplies guardrails", async () => {
     const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
     const originalKey = process.env.AZURE_AI_KEY;
