@@ -581,6 +581,7 @@ export function generateGovernanceReport(
     ],
     generationMetadata: {
       generationMode: "LOCAL_FALLBACK",
+      fallbackUsed: true,
       promptVersion: LOCAL_FALLBACK_PROMPT_VERSION
     },
     riskLevel: signals.riskLevel,

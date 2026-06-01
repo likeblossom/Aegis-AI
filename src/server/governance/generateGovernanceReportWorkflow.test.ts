@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import {
   auditLogs,
@@ -53,7 +53,12 @@ describe("generateGovernanceReportWithWorkflow", () => {
     const result = await generateGovernanceReportWithWorkflow(useCase);
 
     expect(result.analysisMode).toBe("LOCAL_FALLBACK");
-    expect(result.fallbackReason).toBeNull();
+    expect(result.fallbackReason).toBe("AZURE_NOT_CONFIGURED");
+    expect(result.report.generationMetadata).toMatchObject({
+      generationMode: "LOCAL_FALLBACK",
+      fallbackUsed: true,
+      failureReason: "AZURE_NOT_CONFIGURED"
+    });
     expect(result.reportRecord.reportVersion).toBe(1);
     expect(result.reportRecord.generationProvider).toBe("LOCAL_FALLBACK");
     expect(result.workflowRunId).toMatch(
@@ -72,14 +77,14 @@ describe("generateGovernanceReportWithWorkflow", () => {
       .where(eq(auditLogs.useCaseId, useCase.id))
       .all();
     const reportAuditLog = reportAuditLogs.find(
-      (log) => log.action === "REPORT_GENERATED"
+      (log) => log.action === "REPORT_GENERATED_FALLBACK"
     );
     const assessmentAuditLog = reportAuditLogs.find(
       (log) => log.action === "ASSESSMENT_BREAKDOWN_GENERATED"
     );
 
     expect(reportAuditLog?.note).toBe(
-      "Governance report generated using local fallback analysis."
+      "Azure OpenAI generation failed. Azure is not configured. Set AZURE_AI_ENDPOINT and AZURE_AI_KEY. Local fallback report generated."
     );
     expect(reportAuditLog?.note).not.toContain(result.workflowRunId);
     expect(assessmentAuditLog?.note).toBe(
@@ -104,6 +109,49 @@ describe("generateGovernanceReportWithWorkflow", () => {
 
     restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
     restoreEnv("AZURE_AI_KEY", originalKey);
+  });
+
+  it("persists schema validation fallback metadata and audit reason", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    const originalDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const originalFetch = global.fetch;
+
+    process.env.AZURE_AI_ENDPOINT = "https://example.openai.azure.com";
+    process.env.AZURE_AI_KEY = "test-key";
+    process.env.AZURE_OPENAI_DEPLOYMENT = "governance-model";
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "{\"riskLevel\":\"INVALID\"}" } }]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const useCase = createUseCase();
+    const result = await generateGovernanceReportWithWorkflow(useCase);
+    const reportAuditLog = db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.useCaseId, useCase.id))
+      .all()
+      .find((log) => log.action === "REPORT_GENERATED_FALLBACK");
+
+    expect(result.analysisMode).toBe("LOCAL_FALLBACK");
+    expect(result.fallbackReason).toBe("AZURE_SCHEMA_VALIDATION_FAILED");
+    expect(result.report.generationMetadata.failureReason).toBe(
+      "AZURE_SCHEMA_VALIDATION_FAILED"
+    );
+    expect(reportAuditLog?.note).toBe(
+      "Azure OpenAI generation failed. Azure response did not match the expected report schema. Local fallback report generated."
+    );
+
+    global.fetch = originalFetch;
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
+    restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
+    vi.restoreAllMocks();
   });
 });
 

@@ -10,9 +10,18 @@ import {
 import {
   GOVERNANCE_PROMPT_VERSION,
   generateAzureGovernanceReport,
+  getAzureApiVersion,
+  getAzureDiagnosticsContext,
   getAzureGovernanceModel,
   isAzureGovernanceConfigured
 } from "./azureGovernanceReport";
+import {
+  classifyAzureError,
+  getErrorMessage,
+  getErrorStatus,
+  sanitizeAzureDiagnosticMessage,
+  type GenerationFailureReason
+} from "./classifyAzureError";
 import {
   generateGovernanceReport,
   LOCAL_FALLBACK_PROMPT_VERSION
@@ -27,14 +36,15 @@ import {
 } from "./reportTypes";
 import {
   buildAssessmentBreakdownGeneratedAuditNote,
-  buildReportGeneratedAuditNote
+  buildAzureReportGeneratedAuditNote,
+  buildFallbackReportGeneratedAuditNote
 } from "@/lib/audit-log-formatter";
 
 export type GovernanceGenerationResult = {
   reportRecord: GovernanceReport;
   report: GovernanceReportObject;
   analysisMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
-  fallbackReason: string | null;
+  fallbackReason: GenerationFailureReason | null;
   workflowRunId: string;
   workflowPath: string[];
 };
@@ -44,7 +54,7 @@ const GovernanceGenerationState = Annotation.Root({
   signals: Annotation<GovernanceSignals | null>(),
   report: Annotation<GovernanceReportObject | null>(),
   analysisMode: Annotation<"AZURE_OPENAI" | "LOCAL_FALLBACK">(),
-  fallbackReason: Annotation<string | null>(),
+  fallbackReason: Annotation<GenerationFailureReason | null>(),
   promptVersion: Annotation<string>(),
   model: Annotation<string | null>(),
   reportVersion: Annotation<number | null>(),
@@ -65,7 +75,7 @@ async function runDeterministicAnalysis(
     signals,
     report: null,
     analysisMode: "LOCAL_FALLBACK" as const,
-    fallbackReason: null,
+    fallbackReason: isAzureGovernanceConfigured() ? null : "AZURE_NOT_CONFIGURED",
     promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
     model: null,
     workflowPath: ["deterministic_analysis"]
@@ -98,13 +108,23 @@ async function runAzureAnalysis(state: typeof GovernanceGenerationState.State) {
       workflowPath: ["azure_analysis"]
     };
   } catch (error) {
-    const report = generateGovernanceReport(state.useCase, state.signals);
+    const failureReason = classifyAzureError(error);
+    logAzureFallbackDiagnostic({
+      error,
+      failureReason,
+      generationMode: "AZURE_OPENAI"
+    });
+
+    const report = withGenerationMetadata({
+      report: generateGovernanceReport(state.useCase, state.signals),
+      analysisMode: "LOCAL_FALLBACK",
+      fallbackReason: failureReason
+    });
 
     return {
       report,
       analysisMode: "LOCAL_FALLBACK" as const,
-      fallbackReason:
-        error instanceof Error ? error.message : "Azure AI generation failed.",
+      fallbackReason: failureReason,
       promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
       model: null,
       workflowPath: ["azure_analysis_failed"]
@@ -118,9 +138,13 @@ async function runLocalFallback(state: typeof GovernanceGenerationState.State) {
   }
 
   return {
-    report: generateGovernanceReport(state.useCase, state.signals),
+    report: withGenerationMetadata({
+      report: generateGovernanceReport(state.useCase, state.signals),
+      analysisMode: "LOCAL_FALLBACK",
+      fallbackReason: state.fallbackReason ?? "AZURE_NOT_CONFIGURED"
+    }),
     analysisMode: "LOCAL_FALLBACK" as const,
-    fallbackReason: null,
+    fallbackReason: state.fallbackReason ?? "AZURE_NOT_CONFIGURED",
     promptVersion: LOCAL_FALLBACK_PROMPT_VERSION,
     model: null,
     workflowPath: ["local_fallback"]
@@ -170,13 +194,16 @@ async function persistReport(state: typeof GovernanceGenerationState.State) {
   db.insert(auditLogs)
     .values({
       useCaseId: state.useCase.id,
-      action: "REPORT_GENERATED",
-      note: buildReportGeneratedAuditNote({
-        analysisMode: state.analysisMode,
-        reportVersion,
-        riskLevel: state.report.riskLevel,
-        fallbackReason: state.fallbackReason
-      })
+      action:
+        state.analysisMode === "AZURE_OPENAI"
+          ? "REPORT_GENERATED_AZURE"
+          : "REPORT_GENERATED_FALLBACK",
+      note:
+        state.analysisMode === "AZURE_OPENAI"
+          ? buildAzureReportGeneratedAuditNote()
+          : buildFallbackReportGeneratedAuditNote(
+              state.fallbackReason ?? "AZURE_UNKNOWN_ERROR"
+            )
     })
     .run();
 
@@ -208,6 +235,88 @@ const governanceGenerationGraph = new StateGraph(GovernanceGenerationState)
   .addEdge("validate_report", "persist_report")
   .addEdge("persist_report", END)
   .compile();
+
+function withGenerationMetadata({
+  report,
+  analysisMode,
+  fallbackReason
+}: {
+  report: GovernanceReportObject;
+  analysisMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
+  fallbackReason: GenerationFailureReason | null;
+}): GovernanceReportObject {
+  if (analysisMode === "AZURE_OPENAI") {
+    return {
+      ...report,
+      generationMetadata: {
+        ...report.generationMetadata,
+        generationMode: "AZURE_OPENAI",
+        fallbackUsed: false,
+        azureDeployment: getAzureGovernanceModel(),
+        apiVersion: getAzureApiVersion(),
+        modelDeployment: getAzureGovernanceModel(),
+        promptVersion: GOVERNANCE_PROMPT_VERSION
+      }
+    };
+  }
+
+  return {
+    ...report,
+    generationMetadata: {
+      ...report.generationMetadata,
+      generationMode: "LOCAL_FALLBACK",
+      fallbackUsed: true,
+      failureReason: fallbackReason ?? "AZURE_UNKNOWN_ERROR",
+      azureDeployment: isAzureGovernanceConfigured()
+        ? getAzureGovernanceModel()
+        : undefined,
+      apiVersion: isAzureGovernanceConfigured() ? getAzureApiVersion() : undefined,
+      promptVersion: LOCAL_FALLBACK_PROMPT_VERSION
+    }
+  };
+}
+
+function logAzureFallbackDiagnostic({
+  error,
+  failureReason,
+  generationMode
+}: {
+  error: unknown;
+  failureReason: GenerationFailureReason;
+  generationMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
+}) {
+  const context = getAzureDiagnosticsContext();
+
+  console.error("Azure governance generation failed; using local fallback.", {
+    failureReason,
+    errorName: getErrorName(error),
+    errorMessage: truncateDiagnosticMessage(getErrorMessage(error)),
+    httpStatus: getErrorStatus(error) ?? null,
+    azureDeployment: context.deployment,
+    azureApiVersion: context.apiVersion,
+    endpointHost: context.endpointHost,
+    azureEnvPresent: context.env,
+    generationMode
+  });
+}
+
+function getErrorName(error: unknown) {
+  if (error instanceof Error) {
+    return error.name;
+  }
+
+  if (typeof error === "object" && error !== null && "name" in error) {
+    const name = (error as { name?: unknown }).name;
+    return typeof name === "string" ? name : "UnknownError";
+  }
+
+  return "UnknownError";
+}
+
+function truncateDiagnosticMessage(message: string) {
+  const sanitized = sanitizeAzureDiagnosticMessage(message);
+  return sanitized.length > 500 ? `${sanitized.slice(0, 500)}...` : sanitized;
+}
 
 export async function generateGovernanceReportWithWorkflow(
   useCase: UseCase

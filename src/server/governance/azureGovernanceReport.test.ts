@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UseCase } from "@/db/schema";
+import { AzureGenerationError } from "./classifyAzureError";
 import {
   applyDeterministicGuardrails,
   buildAzureChatCompletionsBody,
@@ -16,6 +17,10 @@ import { generateGovernanceReport } from "./generateGovernanceReport";
 import { generateGovernanceSignals } from "./generateGovernanceSignals";
 
 describe("Azure governance report integration helpers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("detects whether Azure governance generation is configured", () => {
     const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
     const originalKey = process.env.AZURE_AI_KEY;
@@ -136,8 +141,11 @@ describe("Azure governance report integration helpers", () => {
       ...generateGovernanceReport(baseUseCase),
       generationMetadata: {
         generationMode: "AZURE_OPENAI" as const,
+        fallbackUsed: false,
+        azureDeployment: "governance-model",
+        apiVersion: "2024-10-21",
         modelDeployment: "governance-model",
-        promptVersion: "governance-analysis-azure-v2.1"
+        promptVersion: "governance-analysis-azure-v2.2"
       }
     };
 
@@ -168,6 +176,154 @@ describe("Azure governance report integration helpers", () => {
       report.assessmentBreakdown.businessValue.improvementActions.length
     ).toBeGreaterThan(0);
     expect(report.riskLevel).toBe(signals.riskLevel);
+    expect(report.generationMetadata.fallbackUsed).toBe(false);
+
+    global.fetch = originalFetch;
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
+    restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
+  });
+
+  it("extracts JSON from Azure responses with surrounding text", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    const originalDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const originalFetch = global.fetch;
+    const signals = generateGovernanceSignals(baseUseCase);
+    const azureReport = {
+      ...generateGovernanceReport(baseUseCase),
+      generationMetadata: {
+        generationMode: "AZURE_OPENAI" as const,
+        fallbackUsed: false,
+        azureDeployment: "governance-model",
+        apiVersion: "2024-10-21",
+        modelDeployment: "governance-model",
+        promptVersion: "governance-analysis-azure-v2.2"
+      }
+    };
+
+    process.env.AZURE_AI_ENDPOINT = "https://example.openai.azure.com";
+    process.env.AZURE_AI_KEY = "test-key";
+    process.env.AZURE_OPENAI_DEPLOYMENT = "governance-model";
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: `Here is the report:\n${JSON.stringify(azureReport)}`
+              }
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    const report = await generateAzureGovernanceReport({
+      useCase: baseUseCase,
+      signals
+    });
+
+    expect(report.generationMetadata.generationMode).toBe("AZURE_OPENAI");
+
+    global.fetch = originalFetch;
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
+    restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
+  });
+
+  it("classifies and logs Azure schema validation failures", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    const originalDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const originalFetch = global.fetch;
+    const invalidReport = {
+      ...generateGovernanceReport(baseUseCase),
+      riskLevel: "NOT_ALLOWED"
+    };
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    process.env.AZURE_AI_ENDPOINT = "https://example.openai.azure.com";
+    process.env.AZURE_AI_KEY = "test-key";
+    process.env.AZURE_OPENAI_DEPLOYMENT = "governance-model";
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(invalidReport) } }]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    await expect(
+      generateAzureGovernanceReport({
+        useCase: baseUseCase,
+        signals: generateGovernanceSignals(baseUseCase)
+      })
+    ).rejects.toMatchObject({
+      reason: "AZURE_SCHEMA_VALIDATION_FAILED"
+    } satisfies Partial<AzureGenerationError>);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Azure governance report schema validation failed.",
+      expect.objectContaining({
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: "riskLevel" })
+        ])
+      })
+    );
+
+    global.fetch = originalFetch;
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
+    restoreEnv("AZURE_OPENAI_DEPLOYMENT", originalDeployment);
+  });
+
+  it("retries transient Azure failures before succeeding", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    const originalDeployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const originalFetch = global.fetch;
+    const signals = generateGovernanceSignals(baseUseCase);
+    const azureReport = {
+      ...generateGovernanceReport(baseUseCase),
+      generationMetadata: {
+        generationMode: "AZURE_OPENAI" as const,
+        fallbackUsed: false,
+        azureDeployment: "governance-model",
+        apiVersion: "2024-10-21",
+        modelDeployment: "governance-model",
+        promptVersion: "governance-analysis-azure-v2.2"
+      }
+    };
+    let callCount = 0;
+
+    process.env.AZURE_AI_ENDPOINT = "https://example.openai.azure.com";
+    process.env.AZURE_AI_KEY = "test-key";
+    process.env.AZURE_OPENAI_DEPLOYMENT = "governance-model";
+    global.fetch = async () => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        return new Response(
+          JSON.stringify({ error: { message: "Rate limit exceeded." } }),
+          { status: 429, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(azureReport) } }]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    };
+
+    const report = await generateAzureGovernanceReport({
+      useCase: baseUseCase,
+      signals
+    });
+
+    expect(callCount).toBe(2);
+    expect(report.generationMetadata.generationMode).toBe("AZURE_OPENAI");
 
     global.fetch = originalFetch;
     restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);

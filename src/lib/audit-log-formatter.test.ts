@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAssessmentBreakdownGeneratedAuditNote,
+  buildAzureReportGeneratedAuditNote,
+  buildFallbackReportGeneratedAuditNote,
   buildReportGeneratedAuditNote,
   buildOpportunityConvertedAuditNote,
   buildOpportunityDiscoveryRunAuditNote,
@@ -35,6 +37,16 @@ describe("audit-log-formatter", () => {
 
     expect(buildAssessmentBreakdownGeneratedAuditNote()).toBe(
       "Detailed AI assessment breakdown generated."
+    );
+
+    expect(buildAzureReportGeneratedAuditNote()).toBe(
+      "Governance report generated using Azure OpenAI with deterministic guardrails."
+    );
+
+    expect(
+      buildFallbackReportGeneratedAuditNote("AZURE_SCHEMA_VALIDATION_FAILED")
+    ).toBe(
+      "Azure OpenAI generation failed. Azure response did not match the expected report schema. Local fallback report generated."
     );
   });
 
@@ -86,6 +98,24 @@ describe("audit-log-formatter", () => {
       )
     ).toBe(
       "Governance report generated using Azure OpenAI with deterministic governance guardrails."
+    );
+
+    expect(
+      formatAuditNoteForDisplay(
+        "REPORT_GENERATED_AZURE",
+        "internal azure debug"
+      )
+    ).toBe(
+      "Governance report generated using Azure OpenAI with deterministic guardrails."
+    );
+
+    expect(
+      formatAuditNoteForDisplay(
+        "REPORT_GENERATED_FALLBACK",
+        "Azure OpenAI generation failed. Azure request timed out. Local fallback report generated."
+      )
+    ).toBe(
+      "Azure OpenAI generation failed. Azure request timed out. Local fallback report generated."
     );
 
     expect(

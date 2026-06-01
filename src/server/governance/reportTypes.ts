@@ -4,6 +4,10 @@ import {
   FINAL_RECOMMENDATION_VALUES,
   RISK_LEVEL_VALUES
 } from "@/lib/constants";
+import {
+  GENERATION_FAILURE_REASONS,
+  type GenerationFailureReason
+} from "./classifyAzureError";
 
 export type RedFlagSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -72,6 +76,10 @@ export type ProposalChallenger = {
 
 export type ReportGenerationMetadata = {
   generationMode: "AZURE_OPENAI" | "LOCAL_FALLBACK";
+  fallbackUsed: boolean;
+  failureReason?: GenerationFailureReason;
+  azureDeployment?: string;
+  apiVersion?: string;
   modelDeployment?: string;
   promptVersion: string;
 };
@@ -148,11 +156,29 @@ const proposalChallengerSchema = z
 const generationMetadataSchema = z
   .object({
     generationMode: z.enum(["AZURE_OPENAI", "LOCAL_FALLBACK"]),
+    fallbackUsed: z.boolean().optional(),
+    failureReason: z
+      .preprocess(
+        (value) =>
+          value === "UNKNOWN_ERROR" || value === "AZURE_REQUEST_FAILED"
+            ? "AZURE_UNKNOWN_ERROR"
+            : value,
+        z.enum(GENERATION_FAILURE_REASONS)
+      )
+      .optional(),
+    azureDeployment: z.string().optional(),
+    apiVersion: z.string().optional(),
     modelDeployment: z.string().optional(),
     promptVersion: z.string()
   })
+  .transform((metadata) => ({
+    ...metadata,
+    fallbackUsed:
+      metadata.fallbackUsed ?? metadata.generationMode === "LOCAL_FALLBACK"
+  }))
   .default({
     generationMode: "LOCAL_FALLBACK",
+    fallbackUsed: true,
     promptVersion: "legacy-report"
   });
 

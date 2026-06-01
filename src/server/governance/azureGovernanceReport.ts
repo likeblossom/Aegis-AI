@@ -1,17 +1,25 @@
 import type { UseCase } from "@/db/schema";
+import { extractJsonObject } from "@/lib/extractJsonObject";
+import { ZodError } from "zod";
 import type { GovernanceSignals } from "./generateGovernanceSignals";
+import {
+  AzureGenerationError,
+  classifyAzureError,
+  getErrorMessage,
+  isTransientAzureFailure
+} from "./classifyAzureError";
 import {
   governanceReportSchema,
   type GovernanceReportObject
 } from "./reportTypes";
 
-export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v2.1";
+export const GOVERNANCE_PROMPT_VERSION = "governance-analysis-azure-v2.2";
 
 const DEFAULT_AZURE_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21";
 const DEFAULT_AZURE_MODEL_INFERENCE_API_VERSION = "2025-04-01";
 const DEFAULT_AZURE_TIMEOUT_MS = 30000;
-const DEFAULT_AZURE_RETRY_COUNT = 1;
+const DEFAULT_AZURE_RETRY_COUNT = 2;
 
 type AzureChatCompletionsResponse = {
   choices?: Array<{
@@ -25,7 +33,46 @@ type AzureChatCompletionsResponse = {
 };
 
 export function isAzureGovernanceConfigured() {
-  return Boolean(process.env.AZURE_AI_ENDPOINT && process.env.AZURE_AI_KEY);
+  if (!process.env.AZURE_AI_ENDPOINT || !process.env.AZURE_AI_KEY) {
+    return false;
+  }
+
+  const normalizedEndpoint = process.env.AZURE_AI_ENDPOINT.replace(/\/$/, "");
+  const usesAzureOpenAIResource =
+    normalizedEndpoint.includes(".openai.azure.com") &&
+    !normalizedEndpoint.endsWith("/chat/completions");
+
+  return !usesAzureOpenAIResource || Boolean(getAzureOpenAIDeployment());
+}
+
+export function getAzureEndpointHost() {
+  const endpoint = process.env.AZURE_AI_ENDPOINT;
+
+  if (!endpoint) {
+    return null;
+  }
+
+  try {
+    return new URL(endpoint).hostname;
+  } catch {
+    return "invalid-endpoint-url";
+  }
+}
+
+export function getAzureDiagnosticsContext() {
+  return {
+    deployment: getAzureGovernanceModel(),
+    apiVersion: getAzureApiVersion(),
+    endpointHost: getAzureEndpointHost(),
+    env: {
+      AZURE_AI_ENDPOINT: Boolean(process.env.AZURE_AI_ENDPOINT),
+      AZURE_AI_KEY: Boolean(process.env.AZURE_AI_KEY),
+      AZURE_AI_MODEL: Boolean(process.env.AZURE_AI_MODEL),
+      AZURE_OPENAI_DEPLOYMENT: Boolean(process.env.AZURE_OPENAI_DEPLOYMENT),
+      AZURE_OPENAI_API_VERSION: Boolean(process.env.AZURE_OPENAI_API_VERSION),
+      AZURE_AI_API_VERSION: Boolean(process.env.AZURE_AI_API_VERSION)
+    }
+  };
 }
 
 export function getAzureGovernanceModel() {
@@ -54,7 +101,10 @@ export function buildAzureChatCompletionsUrl() {
   const endpoint = process.env.AZURE_AI_ENDPOINT;
 
   if (!endpoint) {
-    throw new Error("AZURE_AI_ENDPOINT is not configured.");
+    throw new AzureGenerationError({
+      reason: "AZURE_NOT_CONFIGURED",
+      message: "AZURE_AI_ENDPOINT is not configured."
+    });
   }
 
   const normalizedEndpoint = endpoint.replace(/\/$/, "");
@@ -68,9 +118,10 @@ export function buildAzureChatCompletionsUrl() {
 
   if (deployment || normalizedEndpoint.includes(".openai.azure.com")) {
     if (!deployment) {
-      throw new Error(
-        "AZURE_OPENAI_DEPLOYMENT is required for Azure OpenAI endpoints."
-      );
+      throw new AzureGenerationError({
+        reason: "AZURE_NOT_CONFIGURED",
+        message: "AZURE_OPENAI_DEPLOYMENT is required for Azure OpenAI endpoints."
+      });
     }
 
     return appendApiVersion(
@@ -111,7 +162,10 @@ export async function generateAzureGovernanceReport({
   const apiKey = process.env.AZURE_AI_KEY;
 
   if (!apiKey) {
-    throw new Error("AZURE_AI_KEY is not configured.");
+    throw new AzureGenerationError({
+      reason: "AZURE_NOT_CONFIGURED",
+      message: "AZURE_AI_KEY is not configured."
+    });
   }
 
   const request = {
@@ -141,44 +195,86 @@ export async function generateAzureGovernanceReport({
       if (!response.ok) {
         const message =
           body?.error?.message ?? `Azure AI request failed with ${response.status}.`;
+        const error = new AzureGenerationError({
+          reason: classifyAzureError({ status: response.status, message }),
+          message,
+          status: response.status
+        });
 
         if (
           attempt < DEFAULT_AZURE_RETRY_COUNT &&
-          isRetryableAzureStatus(response.status)
+          isTransientAzureFailure(error)
         ) {
-          lastError = new Error(message);
+          lastError = error;
+          await sleep(backoffMs(attempt));
           continue;
         }
 
-        throw new Error(message);
+        throw error;
       }
 
       if (!body) {
-        throw new Error("Azure AI returned an empty response.");
+        throw new AzureGenerationError({
+          reason: "AZURE_UNKNOWN_ERROR",
+          message: "Azure AI returned an empty response."
+        });
       }
 
       const outputText = extractAzureMessageContent(body);
 
       if (!outputText) {
-        throw new Error("Azure AI response did not include message content.");
+        throw new AzureGenerationError({
+          reason: "AZURE_UNKNOWN_ERROR",
+          message: "Azure AI response did not include message content."
+        });
+      }
+
+      const extracted = extractJsonObject(outputText);
+
+      if (!extracted.success) {
+        throw new AzureGenerationError({
+          reason: "AZURE_JSON_PARSE_FAILED",
+          message: extracted.error
+        });
+      }
+
+      const parsed = governanceReportSchema.safeParse(extracted.value);
+
+      if (!parsed.success) {
+        logSchemaValidationFailure(parsed.error);
+        throw new AzureGenerationError({
+          reason: "AZURE_SCHEMA_VALIDATION_FAILED",
+          message: "Azure report failed schema validation.",
+          cause: parsed.error
+        });
       }
 
       return applyDeterministicGuardrails(
-        governanceReportSchema.parse(JSON.parse(outputText)),
+        parsed.data,
         signals
       );
     } catch (error) {
       lastError = error;
 
-      if (attempt >= DEFAULT_AZURE_RETRY_COUNT) {
+      if (
+        attempt >= DEFAULT_AZURE_RETRY_COUNT ||
+        !isTransientAzureFailure(error)
+      ) {
         break;
       }
+
+      await sleep(backoffMs(attempt));
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Azure AI generation failed.");
+  if (lastError instanceof AzureGenerationError) {
+    throw lastError;
+  }
+
+  throw new AzureGenerationError({
+    reason: classifyAzureError(lastError),
+    message: getErrorMessage(lastError)
+  });
 }
 
 export function buildAzureChatCompletionsBody({
@@ -202,6 +298,9 @@ export function buildAzureChatCompletionsBody({
           promptVersion: GOVERNANCE_PROMPT_VERSION,
           expectedGenerationMetadata: {
             generationMode: "AZURE_OPENAI",
+            fallbackUsed: false,
+            azureDeployment: getAzureGovernanceModel(),
+            apiVersion: getAzureApiVersion(),
             modelDeployment: getAzureGovernanceModel(),
             promptVersion: GOVERNANCE_PROMPT_VERSION
           },
@@ -209,6 +308,12 @@ export function buildAzureChatCompletionsBody({
           deterministicSignals: signals,
           instructions: [
             "Generate the full structured governance report. Azure OpenAI is responsible for stakeholder-facing narrative, rationale, controls, rollout, executive briefing, challenger analysis, success metrics, assumptions, change-management analysis, and assessmentBreakdown.",
+            "Return valid JSON only. Do not include Markdown, code fences, prefaces, commentary, or explanatory text outside the JSON object.",
+            "Enum values must exactly match the schema values.",
+            "Allowed riskLevel values: LOW, MEDIUM, HIGH, CRITICAL.",
+            "Allowed finalRecommendation values: APPROVED, APPROVED_WITH_CONTROLS, NEEDS_REVIEW, REJECTED.",
+            "Allowed confidenceLevel and assessment confidence values: LOW, MEDIUM, HIGH.",
+            "Allowed generationMetadata.generationMode values: AZURE_OPENAI, LOCAL_FALLBACK. Use AZURE_OPENAI for this response.",
             "assessmentBreakdown must evaluate businessValue, implementationComplexity, governanceRisk, changeManagementRisk, dataReadiness, humanOversightStrength, and strategicAlignment.",
             "For every assessment area, provide a 0-100 score, a distinct rationale, proposal-specific evidence, actionable improvement actions, and confidence.",
             "Evidence must quote or closely reference actual proposal content from fields such as currentProcess, proposedSolution, expectedBenefit, affectedStakeholders, implementationTimeline, dataSensitivity, decisionImpact, and humanOversightPlanned.",
@@ -226,6 +331,9 @@ export function buildAzureChatCompletionsBody({
             "Include assumptionsAndUncertainties when information is missing.",
             "Keep explanations concise, business-oriented, and practical for an early enterprise pilot.",
             "Set generationMetadata.generationMode to AZURE_OPENAI.",
+            "Set generationMetadata.fallbackUsed to false.",
+            "Set generationMetadata.azureDeployment to the configured model or deployment name.",
+            "Set generationMetadata.apiVersion to the configured Azure API version.",
             "Set generationMetadata.modelDeployment to the configured model or deployment name.",
             "Set generationMetadata.promptVersion to the provided promptVersion.",
             "Return JSON only."
@@ -259,6 +367,9 @@ export function applyDeterministicGuardrails(
     confidenceLevel: signals.confidenceLevel,
     generationMetadata: {
       generationMode: "AZURE_OPENAI",
+      fallbackUsed: false,
+      azureDeployment: getAzureGovernanceModel(),
+      apiVersion: getAzureApiVersion(),
       modelDeployment: getAzureGovernanceModel(),
       promptVersion: GOVERNANCE_PROMPT_VERSION
     }
@@ -286,13 +397,37 @@ async function fetchWithTimeout(url: string, init: RequestInit) {
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Azure AI request timed out after ${getAzureTimeoutMs()}ms.`);
+      throw new AzureGenerationError({
+        reason: "AZURE_TIMEOUT",
+        message: `Azure AI request timed out after ${getAzureTimeoutMs()}ms.`,
+        cause: error
+      });
     }
 
     throw error;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function backoffMs(attempt: number) {
+  return 250 * 2 ** attempt;
+}
+
+function logSchemaValidationFailure(error: ZodError) {
+  console.error("Azure governance report schema validation failed.", {
+    fieldErrors: error.flatten().fieldErrors,
+    formErrors: error.flatten().formErrors,
+    issues: error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      code: issue.code,
+      message: issue.message
+    }))
+  });
 }
 
 const rationaleItemSchema = {
@@ -447,12 +582,38 @@ const assessmentBreakdownSchema = {
 const generationMetadataSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["generationMode", "modelDeployment", "promptVersion"],
+  required: [
+    "generationMode",
+    "fallbackUsed",
+    "azureDeployment",
+    "apiVersion",
+    "modelDeployment",
+    "promptVersion"
+  ],
   properties: {
     generationMode: {
       type: "string",
       enum: ["AZURE_OPENAI", "LOCAL_FALLBACK"]
     },
+    fallbackUsed: { type: "boolean" },
+    failureReason: {
+      type: "string",
+      enum: [
+        "AZURE_NOT_CONFIGURED",
+        "AZURE_UNAUTHORIZED",
+        "AZURE_FORBIDDEN",
+        "AZURE_DEPLOYMENT_NOT_FOUND",
+        "AZURE_RATE_LIMITED",
+        "AZURE_CONTENT_FILTERED",
+        "AZURE_BAD_REQUEST",
+        "AZURE_TIMEOUT",
+        "AZURE_JSON_PARSE_FAILED",
+        "AZURE_SCHEMA_VALIDATION_FAILED",
+        "AZURE_UNKNOWN_ERROR"
+      ]
+    },
+    azureDeployment: { type: "string" },
+    apiVersion: { type: "string" },
     modelDeployment: { type: "string" },
     promptVersion: { type: "string" }
   }

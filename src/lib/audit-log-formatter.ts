@@ -6,6 +6,8 @@ type AuditAction =
   | "OPPORTUNITY_CONVERTED_TO_PROPOSAL"
   | "PROPOSAL_CREATED"
   | "REPORT_GENERATED"
+  | "REPORT_GENERATED_AZURE"
+  | "REPORT_GENERATED_FALLBACK"
   | "ASSESSMENT_BREAKDOWN_GENERATED"
   | "REVIEW_STATUS_UPDATED"
   | "REVIEW_NOTE_ADDED"
@@ -41,6 +43,8 @@ const actionLabels: Record<AuditAction, string> = {
   OPPORTUNITY_CONVERTED_TO_PROPOSAL: "Opportunity Converted to Proposal",
   PROPOSAL_CREATED: "Proposal Created",
   REPORT_GENERATED: "Report Generated",
+  REPORT_GENERATED_AZURE: "Azure Report Generated",
+  REPORT_GENERATED_FALLBACK: "Fallback Report Generated",
   ASSESSMENT_BREAKDOWN_GENERATED: "Assessment Breakdown Generated",
   REVIEW_STATUS_UPDATED: "Review Status Updated",
   REVIEW_NOTE_ADDED: "Review Note Added",
@@ -56,6 +60,8 @@ const actionActors: Record<AuditAction, AuditActor> = {
   OPPORTUNITY_CONVERTED_TO_PROPOSAL: "proposalOwner",
   PROPOSAL_CREATED: "proposalOwner",
   REPORT_GENERATED: "ai",
+  REPORT_GENERATED_AZURE: "ai",
+  REPORT_GENERATED_FALLBACK: "ai",
   ASSESSMENT_BREAKDOWN_GENERATED: "ai",
   REVIEW_STATUS_UPDATED: "reviewer",
   REVIEW_NOTE_ADDED: "reviewer",
@@ -132,8 +138,46 @@ export function buildReportGeneratedAuditNote({
   return "Governance report generated using local fallback analysis.";
 }
 
+export function buildAzureReportGeneratedAuditNote() {
+  return "Governance report generated using Azure OpenAI with deterministic guardrails.";
+}
+
+export function buildFallbackReportGeneratedAuditNote(failureReason: string) {
+  return `Azure OpenAI generation failed. ${formatGenerationFailureReason(
+    failureReason
+  )}. Local fallback report generated.`;
+}
+
 export function buildAssessmentBreakdownGeneratedAuditNote() {
   return "Detailed AI assessment breakdown generated.";
+}
+
+export function formatGenerationFailureReason(reason: string | null | undefined) {
+  const labels: Record<string, string> = {
+    AZURE_NOT_CONFIGURED:
+      "Azure is not configured. Set AZURE_AI_ENDPOINT and AZURE_AI_KEY",
+    AZURE_UNAUTHORIZED: "Azure authentication failed. Check AZURE_AI_KEY",
+    AZURE_FORBIDDEN:
+      "Azure rejected the request due to insufficient permissions",
+    AZURE_DEPLOYMENT_NOT_FOUND:
+      "Azure deployment was not found. Check AZURE_OPENAI_DEPLOYMENT",
+    AZURE_RATE_LIMITED: "Azure rate limited the request. Try again later",
+    AZURE_CONTENT_FILTERED: "Azure blocked the response with content filtering",
+    AZURE_BAD_REQUEST:
+      "Azure rejected the request format. Check endpoint, deployment, and API version",
+    AZURE_TIMEOUT: "Azure request timed out",
+    AZURE_JSON_PARSE_FAILED:
+      "Azure response could not be parsed as a governance report",
+    AZURE_SCHEMA_VALIDATION_FAILED:
+      "Azure response did not match the expected report schema",
+    AZURE_UNKNOWN_ERROR: "Azure failed with an unknown error",
+    AZURE_REQUEST_FAILED: "Azure request failed",
+    UNKNOWN_ERROR: "Azure failed with an unknown error"
+  };
+
+  return reason
+    ? labels[reason] ?? formatAuditEnumLabel(reason)
+    : "Azure failed with an unknown error";
 }
 
 export function buildReviewStatusUpdatedAuditNote({
@@ -198,6 +242,29 @@ export function formatAuditNoteForDisplay(action: string, note: string) {
       riskLevel: riskMatch?.[1]?.toUpperCase() ?? "MEDIUM",
       fallbackReason: isFallback ? "fallback" : null
     });
+  }
+
+  if (action === "REPORT_GENERATED_AZURE") {
+    return buildAzureReportGeneratedAuditNote();
+  }
+
+  if (action === "REPORT_GENERATED_FALLBACK") {
+    const currentReason = withoutWorkflowId.match(
+      /Azure OpenAI generation failed\.\s+(.+?)\.\s+Local fallback/i
+    );
+    const legacyReason = withoutWorkflowId.match(
+      /due to\s+(.+?)\.\s+Local fallback/i
+    );
+
+    if (currentReason) {
+      return `Azure OpenAI generation failed. ${currentReason[1]}. Local fallback report generated.`;
+    }
+
+    if (legacyReason) {
+      return `Azure OpenAI generation failed. ${legacyReason[1]}. Local fallback report generated.`;
+    }
+
+    return buildFallbackReportGeneratedAuditNote("AZURE_UNKNOWN_ERROR");
   }
 
   if (action === "ASSESSMENT_BREAKDOWN_GENERATED") {

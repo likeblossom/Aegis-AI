@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { formatGenerationFailureReason } from "@/lib/audit-log-formatter";
 import { REVIEW_STATUS_VALUES, formatEnumLabel } from "@/lib/constants";
 import type { ReviewStatus } from "@/lib/validations";
 
@@ -57,7 +58,9 @@ export function ReportActions({
       body.analysisMode === "AZURE_OPENAI"
         ? "Azure OpenAI generated the latest governance report with deterministic guardrails."
         : body.fallbackReason
-          ? "Azure OpenAI was unavailable, so local fallback analysis generated the report."
+          ? `${formatGenerationFailureReason(
+              body.fallbackReason
+            )}. Local fallback analysis generated the report.`
           : "Local fallback analysis generated the report."
     );
     router.refresh();

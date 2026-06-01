@@ -1,5 +1,6 @@
 import type { GovernanceReport } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
+import { formatGenerationFailureReason } from "@/lib/audit-log-formatter";
 import type { GovernanceReportObject } from "@/server/governance/reportTypes";
 import {
   AssessmentBreakdown,
@@ -56,6 +57,21 @@ export function GovernanceReportView({
               This report was generated using local fallback analysis.
             </p>
           ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="w-fit rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-ink">
+              {report.generationMetadata.fallbackUsed
+                ? "Generated with Local Fallback"
+                : "Generated with Azure OpenAI"}
+            </span>
+            {report.generationMetadata.fallbackUsed ? (
+              <span className="text-xs leading-5 text-muted">
+                Fallback reason:{" "}
+                {formatGenerationFailureReason(
+                  report.generationMetadata.failureReason
+                )}
+              </span>
+            ) : null}
+          </div>
           <p className="mt-2 text-xs leading-5 text-muted">
             Generation mode:{" "}
             {formatEnumLabel(report.generationMetadata.generationMode)}
