@@ -1,5 +1,6 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { GovernanceReportView } from "@/components/reports/GovernanceReportView";
 import { ReportActions } from "@/components/reports/ReportActions";
 import { ReportHistory } from "@/components/reports/ReportHistory";
@@ -82,6 +83,9 @@ export default async function UseCaseDetailPage({
   const report = reportRecord
     ? parseGovernanceReportJson(reportRecord.reportJson)
     : null;
+  const latestReport = latestReportRecord
+    ? parseGovernanceReportJson(latestReportRecord.reportJson)
+    : null;
 
   const notes = db
     .select()
@@ -89,57 +93,160 @@ export default async function UseCaseDetailPage({
     .where(eq(reviewerNotes.useCaseId, proposal.id))
     .orderBy(asc(reviewerNotes.createdAt))
     .all();
+  const assignedReviewer = proposal.assignedReviewer;
+  const reviewerAssignedCases =
+    assignedReviewer === "Unassigned"
+      ? []
+      : db
+          .select()
+          .from(useCases)
+          .where(eq(useCases.assignedReviewer, assignedReviewer))
+          .all();
+  const reviewerQueueCount =
+    assignedReviewer === "Unassigned"
+      ? 0
+      : reviewerAssignedCases.filter((item) =>
+          ["PENDING", "NEEDS_REVIEW", "REJECTED"].includes(item.status)
+        ).length;
+  const reviewerRecentCount =
+    assignedReviewer === "Unassigned"
+      ? 0
+      : db
+          .select()
+          .from(reviewerNotes)
+          .where(eq(reviewerNotes.reviewerName, assignedReviewer))
+          .all().length;
 
   return (
     <PageShell>
-      <div className="mb-6">
+      <div className="mb-6 space-y-5">
         <BackLink />
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-ink">{proposal.title}</h1>
-            <p className="mt-2 text-sm text-muted">{proposal.department}</p>
+        <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge value={proposal.status} />
+                <span className="rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-muted">
+                  {proposal.department}
+                </span>
+                <span className="rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-muted">
+                  ID {proposal.id}
+                </span>
+              </div>
+              <h1 className="mt-4 text-2xl font-semibold tracking-normal text-ink sm:text-3xl">
+                {proposal.title}
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
+                {proposal.proposedSolution}
+              </p>
+            </div>
+            <div className="grid min-w-full gap-3 sm:grid-cols-2 lg:min-w-[360px]">
+              <SummaryTile label="Reviewer" value={proposal.assignedReviewer} />
+              <SummaryTile
+                label="Report"
+                value={latestReportRecord ? `v${latestReportRecord.reportVersion}` : "Not generated"}
+              />
+              <SummaryTile
+                label="Risk"
+                value={latestReport ? formatEnumLabel(latestReport.riskLevel) : "Pending"}
+              />
+              <SummaryTile
+                label="Recommendation"
+                value={
+                  latestReport
+                    ? formatEnumLabel(latestReport.finalRecommendation)
+                    : "Pending analysis"
+                }
+              />
+            </div>
           </div>
-          <StatusBadge value={proposal.status} />
+        </section>
+        <div className="grid gap-3 md:grid-cols-4">
+          <MetricPill
+            label="Data sensitivity"
+            value={formatEnumLabel(proposal.dataSensitivity)}
+          />
+          <MetricPill
+            label="Decision impact"
+            value={formatEnumLabel(proposal.decisionImpact)}
+          />
+          <MetricPill
+            label="Human oversight"
+            value={formatEnumLabel(proposal.humanOversightPlanned)}
+          />
+          <MetricPill label="Timeline" value={proposal.implementationTimeline} />
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <div className="space-y-6">
           <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-semibold text-ink">Proposal details</h2>
-            <dl className="mt-5 grid gap-5">
-              <DetailItem label="Team owner" value={proposal.teamOwner} />
-              <DetailItem
-                label="Assigned reviewer"
-                value={proposal.assignedReviewer}
-              />
-              <DetailItem label="Current process" value={proposal.currentProcess} />
-              <DetailItem
-                label="Proposed AI solution"
-                value={proposal.proposedSolution}
-              />
-              <DetailItem label="Expected benefit" value={proposal.expectedBenefit} />
-              <DetailItem
-                label="Data sensitivity"
-                value={formatEnumLabel(proposal.dataSensitivity)}
-              />
-              <DetailItem
-                label="Decision impact"
-                value={formatEnumLabel(proposal.decisionImpact)}
-              />
-              <DetailItem
-                label="Human oversight planned"
-                value={formatEnumLabel(proposal.humanOversightPlanned)}
-              />
-              <DetailItem
-                label="Affected stakeholders"
-                value={proposal.affectedStakeholders}
-              />
-              <DetailItem
-                label="Implementation timeline"
-                value={proposal.implementationTimeline}
-              />
-            </dl>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Intake summary
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-ink">
+                  Proposal details
+                </h2>
+              </div>
+              <p className="text-xs leading-5 text-muted">
+                Created {new Date(`${proposal.createdAt}Z`).toLocaleDateString()}
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-5">
+              <DetailGroup title="Ownership">
+                <DetailItem label="Team owner" value={proposal.teamOwner} />
+                <DetailItem
+                  label="Assigned reviewer"
+                  value={proposal.assignedReviewer}
+                />
+                <DetailItem label="Department" value={proposal.department} />
+              </DetailGroup>
+
+              <DetailGroup title="Operating context">
+                <DetailItem
+                  label="Current process"
+                  value={proposal.currentProcess}
+                  prominent
+                />
+                <DetailItem
+                  label="Proposed AI solution"
+                  value={proposal.proposedSolution}
+                  prominent
+                />
+                <DetailItem
+                  label="Expected benefit"
+                  value={proposal.expectedBenefit}
+                  prominent
+                />
+              </DetailGroup>
+
+              <DetailGroup title="Governance inputs">
+                <DetailItem
+                  label="Data sensitivity"
+                  value={formatEnumLabel(proposal.dataSensitivity)}
+                />
+                <DetailItem
+                  label="Decision impact"
+                  value={formatEnumLabel(proposal.decisionImpact)}
+                />
+                <DetailItem
+                  label="Human oversight planned"
+                  value={formatEnumLabel(proposal.humanOversightPlanned)}
+                />
+                <DetailItem
+                  label="Affected stakeholders"
+                  value={proposal.affectedStakeholders}
+                  prominent
+                />
+                <DetailItem
+                  label="Implementation timeline"
+                  value={proposal.implementationTimeline}
+                />
+              </DetailGroup>
+            </div>
           </section>
 
           <GovernanceReportView
@@ -153,9 +260,11 @@ export default async function UseCaseDetailPage({
           />
         </div>
 
-        <aside className="space-y-6">
+        <aside className="space-y-5 lg:sticky lg:top-6">
           <ReviewerAssignmentForm
             assignedReviewer={proposal.assignedReviewer}
+            reviewerQueueCount={reviewerQueueCount}
+            reviewerRecentCount={reviewerRecentCount}
             useCaseId={proposal.id}
           />
 
@@ -174,20 +283,28 @@ export default async function UseCaseDetailPage({
           />
 
           <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-ink">Audit log</h2>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Activity
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-ink">Audit log</h2>
+            </div>
             <ol className="mt-4 space-y-4">
               {logs.map((log) => (
-                <li key={log.id} className="border-l-2 border-border pl-4">
-                  <p className="text-sm font-medium text-ink">
-                    {formatAuditActionLabel(log.action)}
-                  </p>
-                  <p className="mt-1 text-sm text-muted">
-                    {formatAuditNoteForDisplay(log.action, log.note)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {getAuditActorLabel(log.action)} |{" "}
-                    {new Date(`${log.createdAt}Z`).toLocaleString()}
-                  </p>
+                <li key={log.id} className="relative pl-5">
+                  <span className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full border border-slate-300 bg-white" />
+                  <div className="border-l border-border pb-4 pl-4">
+                    <p className="text-sm font-semibold text-ink">
+                      {formatAuditActionLabel(log.action)}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-muted">
+                      {formatAuditNoteForDisplay(log.action, log.note)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {getAuditActorLabel(log.action)} -{" "}
+                      {new Date(`${log.createdAt}Z`).toLocaleString()}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -198,13 +315,64 @@ export default async function UseCaseDetailPage({
   );
 }
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-panel px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-semibold text-ink">{value}</p>
+    </div>
+  );
+}
+
+function MetricPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-white px-4 py-3 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold leading-6 text-ink">{value}</p>
+    </div>
+  );
+}
+
+function DetailGroup({
+  title,
+  children
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <div>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
+      <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">{children}</div>
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  prominent = false
+}: {
+  label: string;
+  value: string;
+  prominent?: boolean;
+}) {
+  return (
+    <div
+      className={
+        prominent
+          ? "rounded-md border border-border bg-panel p-4 sm:col-span-2"
+          : "rounded-md border border-border bg-panel p-4"
+      }
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
-      </dt>
-      <dd className="mt-1 text-sm leading-6 text-ink">{value}</dd>
+      </p>
+      <p className="mt-1 text-sm leading-6 text-ink">{value}</p>
     </div>
   );
 }

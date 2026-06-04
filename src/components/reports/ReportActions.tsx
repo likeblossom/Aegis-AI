@@ -90,7 +90,12 @@ export function ReportActions({
 
   return (
     <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold text-ink">Review actions</h2>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Workflow
+        </p>
+        <h2 className="mt-1 text-lg font-semibold text-ink">Review actions</h2>
+      </div>
       <div className="mt-4 space-y-5">
         <button
           className="w-full rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -114,7 +119,7 @@ export function ReportActions({
           <label className="block text-sm font-medium text-ink">
             <span>Reviewer decision</span>
             <select
-              className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
               value={status}
               onChange={(event) => setStatus(event.target.value as ReviewStatus)}
             >
@@ -128,7 +133,7 @@ export function ReportActions({
           <label className="block text-sm font-medium text-ink">
             <span>Reviewer name</span>
             <input
-              className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
               value={reviewerName}
               onChange={(event) => setReviewerName(event.target.value)}
             />
@@ -136,7 +141,7 @@ export function ReportActions({
           <label className="block text-sm font-medium text-ink">
             <span>Review note</span>
             <textarea
-              className="mt-2 min-h-24 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              className="mt-2 min-h-24 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
               placeholder="Document rationale, required follow-up, or approval conditions."
               value={note}
               onChange={(event) => setNote(event.target.value)}

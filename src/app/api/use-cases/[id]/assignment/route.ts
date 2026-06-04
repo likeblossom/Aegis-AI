@@ -39,14 +39,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Use case not found" }, { status: 404 });
   }
 
-  if (proposal.assignedReviewer === parsed.data.assignedReviewer) {
+  const assignedReviewer = parsed.data.assignedReviewer.trim();
+
+  if (proposal.assignedReviewer === assignedReviewer) {
     return NextResponse.json(proposal);
   }
 
   const updated = db
     .update(useCases)
     .set({
-      assignedReviewer: parsed.data.assignedReviewer,
+      assignedReviewer,
       updatedAt: sql`CURRENT_TIMESTAMP`
     })
     .where(eq(useCases.id, numericId))
@@ -59,7 +61,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       action: "REVIEWER_ASSIGNED",
       note: buildReviewerAssignedAuditNote({
         previousReviewer: proposal.assignedReviewer,
-        newReviewer: parsed.data.assignedReviewer
+        newReviewer: assignedReviewer
       })
     })
     .run();

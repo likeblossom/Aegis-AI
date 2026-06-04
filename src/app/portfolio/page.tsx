@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
+import type { ReactNode } from "react";
 import { PageShell } from "@/components/ui/page-shell";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { db } from "@/db";
 import { governanceReports, useCases } from "@/db/schema";
 import { formatEnumLabel } from "@/lib/constants";
+import { analyzePortfolio } from "@/server/portfolio/analytics";
 import {
   prioritizePortfolio,
   type PriorityCategory
@@ -45,6 +47,7 @@ export default async function PortfolioPage() {
       ];
     })
   );
+  const analytics = analyzePortfolio(rankedProposals);
 
   return (
     <PageShell maxWidth="wide">
@@ -73,7 +76,7 @@ export default async function PortfolioPage() {
         </Link>
       </section>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <SummaryCard label="Ranked proposals" value={rankedProposals.length} />
         <SummaryCard
           label="Quick wins"
@@ -91,6 +94,18 @@ export default async function PortfolioPage() {
             ).length
           }
         />
+        <SummaryCard
+          label="Avg readiness"
+          value={`${analytics.averageReadiness}%`}
+        />
+        <SummaryCard
+          label="High risk"
+          value={analytics.criticalRiskCount}
+        />
+        <SummaryCard
+          label="Avg controls"
+          value={analytics.averageRequiredControls}
+        />
       </div>
 
       {rankedProposals.length === 0 ? (
@@ -98,9 +113,76 @@ export default async function PortfolioPage() {
           No proposals have generated governance reports yet.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-[1320px] table-fixed divide-y divide-border text-left text-sm xl:min-w-full">
+        <>
+          <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <AnalyticsPanel title="Portfolio posture">
+              <AnalyticsRow
+                label="Approval-ready candidates"
+                value={analytics.approvalReadyCount}
+              />
+              <AnalyticsRow
+                label="Governance bottlenecks"
+                value={analytics.governanceReviewCount}
+              />
+              <AnalyticsRow
+                label="Confidential or sensitive data"
+                value={analytics.highDataSensitivityCount}
+              />
+              <AnalyticsRow
+                label="Required controls captured"
+                value={analytics.totalRequiredControls}
+              />
+            </AnalyticsPanel>
+            <AnalyticsPanel title="Risk distribution">
+              {analytics.riskDistribution.map((item) => (
+                <BarRow
+                  count={item.count}
+                  key={item.label}
+                  label={formatEnumLabel(item.label)}
+                  total={rankedProposals.length}
+                />
+              ))}
+            </AnalyticsPanel>
+            <AnalyticsPanel title="Top control themes">
+              {analytics.topControlThemes.length > 0 ? (
+                analytics.topControlThemes.map((item) => (
+                  <AnalyticsRow
+                    key={item.theme}
+                    label={item.theme}
+                    value={item.count}
+                  />
+                ))
+              ) : (
+                <p className="text-sm leading-6 text-muted">
+                  No required controls were available in the latest reports.
+                </p>
+              )}
+            </AnalyticsPanel>
+          </section>
+          <section className="mb-5 grid gap-4 lg:grid-cols-2">
+            <AnalyticsPanel title="Leading departments">
+              {analytics.departmentLeaders.map((item) => (
+                <AnalyticsRow
+                  key={item.department}
+                  label={`${item.department} (${item.count})`}
+                  value={`${item.averageScore}/100`}
+                />
+              ))}
+            </AnalyticsPanel>
+            <AnalyticsPanel title="Recommendation mix">
+              {analytics.recommendationDistribution.map((item) => (
+                <BarRow
+                  count={item.count}
+                  key={item.label}
+                  label={formatEnumLabel(item.label)}
+                  total={rankedProposals.length}
+                />
+              ))}
+            </AnalyticsPanel>
+          </section>
+          <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-[1320px] table-fixed divide-y divide-border text-left text-sm xl:min-w-full">
               <colgroup>
                 <col className="w-[78px]" />
                 <col className="w-[260px]" />
@@ -171,19 +253,77 @@ export default async function PortfolioPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </PageShell>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+function SummaryCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
       <div className="text-sm font-medium text-muted">{label}</div>
       <div className="mt-2 text-3xl font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
+
+function AnalyticsPanel({
+  title,
+  children
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
+      <h2 className="text-sm font-semibold text-ink">{title}</h2>
+      <div className="mt-4 space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function AnalyticsRow({
+  label,
+  value
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 text-sm">
+      <span className="leading-5 text-muted">{label}</span>
+      <span className="font-semibold text-ink">{value}</span>
+    </div>
+  );
+}
+
+function BarRow({
+  label,
+  count,
+  total
+}: {
+  label: string;
+  count: number;
+  total: number;
+}) {
+  const width = total === 0 ? 0 : Math.round((count / total) * 100);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-4 text-sm">
+        <span className="leading-5 text-muted">{label}</span>
+        <span className="font-semibold text-ink">{count}</span>
+      </div>
+      <div className="mt-2 h-2 rounded-full bg-panel">
+        <div
+          className="h-2 rounded-full bg-slate-700"
+          style={{ width: `${width}%` }}
+        />
+      </div>
     </div>
   );
 }
