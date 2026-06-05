@@ -25,22 +25,19 @@ const baseUseCaseInput = {
   status: "PENDING"
 };
 
+const createdUseCaseIds: number[] = [];
+
 describe("generateGovernanceReportWithWorkflow", () => {
   afterEach(() => {
-    const rows = db
-      .select()
-      .from(useCases)
-      .where(eq(useCases.title, baseUseCaseInput.title))
-      .all();
-
-    for (const row of rows) {
+    for (const id of createdUseCaseIds) {
       db.delete(governanceReports)
-        .where(eq(governanceReports.useCaseId, row.id))
+        .where(eq(governanceReports.useCaseId, id))
         .run();
-      db.delete(reviewerNotes).where(eq(reviewerNotes.useCaseId, row.id)).run();
-      db.delete(auditLogs).where(eq(auditLogs.useCaseId, row.id)).run();
-      db.delete(useCases).where(eq(useCases.id, row.id)).run();
+      db.delete(reviewerNotes).where(eq(reviewerNotes.useCaseId, id)).run();
+      db.delete(auditLogs).where(eq(auditLogs.useCaseId, id)).run();
+      db.delete(useCases).where(eq(useCases.id, id)).run();
     }
+    createdUseCaseIds.length = 0;
   });
 
   it("persists local fallback reports when Azure is not configured", async () => {
@@ -66,10 +63,36 @@ describe("generateGovernanceReportWithWorkflow", () => {
     );
     expect(result.workflowPath).toEqual([
       "deterministic_analysis",
+      "risk_triage",
+      "portfolio_prioritizer",
       "local_fallback",
+      "synthesis",
       "validate_report",
       "persist_report"
     ]);
+    expect(result.report.workflowTrace).toMatchObject({
+      runId: result.workflowRunId,
+      path: result.workflowPath,
+      reviewerNodesExecuted: ["risk_triage", "portfolio_prioritizer"],
+      humanReviewRequired: false
+    });
+    expect(result.report.workflowTrace.agentFindings).toHaveLength(2);
+    expect(result.report.workflowTrace.agentFindings[0]).toMatchObject({
+      agent: "risk_triage",
+      summary: expect.stringContaining(baseUseCaseInput.title),
+      evidence: expect.arrayContaining([
+        expect.stringContaining(baseUseCaseInput.proposedSolution)
+      ]),
+      controlRationale: expect.stringContaining("accountability")
+    });
+    expect(result.report.workflowTrace.routingDecisions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: "risk_triage",
+          to: "portfolio_prioritizer"
+        })
+      ])
+    );
 
     const reportAuditLogs = db
       .select()
@@ -111,6 +134,98 @@ describe("generateGovernanceReportWithWorkflow", () => {
     restoreEnv("AZURE_AI_KEY", originalKey);
   });
 
+  it("routes sensitive high-impact proposals through privacy, oversight, and change reviewers", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    delete process.env.AZURE_AI_ENDPOINT;
+    delete process.env.AZURE_AI_KEY;
+
+    const useCase = createUseCase({
+      dataSensitivity: "SENSITIVE",
+      decisionImpact: "HIGH",
+      affectedStakeholders: "Employees, managers, and compliance team",
+      proposedSolution:
+        "Use AI to recommend eligibility decisions for manager review."
+    });
+    const result = await generateGovernanceReportWithWorkflow(useCase);
+
+    expect(result.workflowPath).toEqual([
+      "deterministic_analysis",
+      "risk_triage",
+      "data_privacy_reviewer",
+      "human_oversight_reviewer",
+      "change_management_reviewer",
+      "portfolio_prioritizer",
+      "local_fallback",
+      "synthesis",
+      "validate_report",
+      "persist_report"
+    ]);
+    expect(result.report.workflowTrace.humanReviewRequired).toBe(true);
+    expect(result.report.workflowTrace.reviewerNodesExecuted).toEqual([
+      "risk_triage",
+      "data_privacy_reviewer",
+      "human_oversight_reviewer",
+      "change_management_reviewer",
+      "portfolio_prioritizer"
+    ]);
+    expect(result.report.workflowTrace.agentFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agent: "data_privacy_reviewer",
+          summary: expect.stringContaining("Sensitive data"),
+          evidence: expect.arrayContaining([
+            expect.stringContaining("Employees, managers, and compliance team")
+          ]),
+          recommendedControls: expect.arrayContaining([
+            expect.stringContaining("prompts")
+          ])
+        }),
+        expect.objectContaining({
+          agent: "change_management_reviewer",
+          findings: expect.arrayContaining([
+            expect.stringContaining("adoption metrics")
+          ])
+        })
+      ])
+    );
+
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
+  });
+
+  it("routes HR proposals without oversight through critical review", async () => {
+    const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
+    const originalKey = process.env.AZURE_AI_KEY;
+    delete process.env.AZURE_AI_ENDPOINT;
+    delete process.env.AZURE_AI_KEY;
+
+    const useCase = createUseCase({
+      department: "Human Resources",
+      currentProcess: "Recruiters manually screen candidates.",
+      proposedSolution:
+        "Use AI to rank applicants and reject low-scoring candidates.",
+      decisionImpact: "HIGH",
+      humanOversightPlanned: "NO",
+      affectedStakeholders: "Candidates, recruiters, and hiring managers"
+    });
+    const result = await generateGovernanceReportWithWorkflow(useCase);
+    const triageFinding = result.report.workflowTrace.agentFindings.find(
+      (finding) => finding.agent === "risk_triage"
+    );
+
+    expect(result.report.workflowTrace.humanReviewRequired).toBe(true);
+    expect(triageFinding?.findings[0]).toContain("critical");
+    expect(triageFinding?.evidence.join(" ")).toContain(
+      "HR or applicant workflow"
+    );
+    expect(result.workflowPath).toContain("human_oversight_reviewer");
+    expect(result.workflowPath).toContain("change_management_reviewer");
+
+    restoreEnv("AZURE_AI_ENDPOINT", originalEndpoint);
+    restoreEnv("AZURE_AI_KEY", originalKey);
+  });
+
   it("persists schema validation fallback metadata and audit reason", async () => {
     const originalEndpoint = process.env.AZURE_AI_ENDPOINT;
     const originalKey = process.env.AZURE_AI_KEY;
@@ -143,6 +258,8 @@ describe("generateGovernanceReportWithWorkflow", () => {
     expect(result.report.generationMetadata.failureReason).toBe(
       "AZURE_SCHEMA_VALIDATION_FAILED"
     );
+    expect(result.report.workflowTrace.path).toEqual(result.workflowPath);
+    expect(result.report.workflowTrace.agentFindings.length).toBeGreaterThan(0);
     expect(reportAuditLog?.note).toBe(
       "Azure OpenAI generation failed. Azure response did not match the expected report schema. Local fallback report generated."
     );
@@ -155,8 +272,16 @@ describe("generateGovernanceReportWithWorkflow", () => {
   });
 });
 
-function createUseCase(): UseCase {
-  return db.insert(useCases).values(baseUseCaseInput).returning().get();
+function createUseCase(
+  overrides: Partial<typeof baseUseCaseInput> = {}
+): UseCase {
+  const row = db
+    .insert(useCases)
+    .values({ ...baseUseCaseInput, ...overrides })
+    .returning()
+    .get();
+  createdUseCaseIds.push(row.id);
+  return row;
 }
 
 function restoreEnv(key: string, value: string | undefined) {

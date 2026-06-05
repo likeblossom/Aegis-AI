@@ -584,6 +584,14 @@ export function generateGovernanceReport(
       fallbackUsed: true,
       promptVersion: LOCAL_FALLBACK_PROMPT_VERSION
     },
+    workflowTrace: {
+      runId: "legacy-report",
+      path: [],
+      reviewerNodesExecuted: [],
+      routingDecisions: [],
+      agentFindings: [],
+      humanReviewRequired: false
+    },
     riskLevel: signals.riskLevel,
     aiReadinessScore: signals.aiReadinessScore,
     finalRecommendation: signals.finalRecommendation,

@@ -239,6 +239,46 @@ describe("deterministic governance analysis", () => {
     ).toBe(false);
   });
 
+  it("validates workflow trace provenance and defaults legacy traces", () => {
+    const report = generateGovernanceReport(baseUseCase);
+    const parsed = governanceReportSchema.parse({
+      ...report,
+      workflowTrace: {
+        runId: "test-run",
+        path: ["deterministic_analysis", "risk_triage", "persist_report"],
+        reviewerNodesExecuted: ["risk_triage"],
+        routingDecisions: [
+          {
+            from: "deterministic_analysis",
+            to: "risk_triage",
+            reason: "Deterministic signals route into council triage."
+          }
+        ],
+        agentFindings: [
+          {
+            agent: "risk_triage",
+            riskLevel: "LOW",
+            findings: ["Standard review path."],
+            recommendedControls: ["Keep human review for pilot outputs."]
+          }
+        ],
+        humanReviewRequired: false
+      }
+    });
+    const legacyParsed = governanceReportSchema.parse(report);
+
+    expect(parsed.workflowTrace.runId).toBe("test-run");
+    expect(parsed.workflowTrace.agentFindings[0].agent).toBe("risk_triage");
+    expect(legacyParsed.workflowTrace).toEqual({
+      runId: "legacy-report",
+      path: [],
+      reviewerNodesExecuted: [],
+      routingDecisions: [],
+      agentFindings: [],
+      humanReviewRequired: false
+    });
+  });
+
   it("generates proposal-specific assessment evidence and actions in fallback reports", () => {
     const report = generateGovernanceReport(baseUseCase);
     const areas = Object.values(report.assessmentBreakdown);
@@ -327,6 +367,7 @@ describe("deterministic governance analysis", () => {
       executiveBriefing: _executiveBriefing,
       changeManagementAnalysis: _changeManagementAnalysis,
       assessmentBreakdown: _assessmentBreakdown,
+      workflowTrace: _workflowTrace,
       ...legacyReport
     } = report;
 
@@ -347,6 +388,7 @@ describe("deterministic governance analysis", () => {
     expect(parsed?.assessmentBreakdown.businessValue.evidenceFromProposal.length).toBe(
       1
     );
+    expect(parsed?.workflowTrace.runId).toBe("legacy-report");
   });
 
   it("validates review status updates without allowing pending", () => {

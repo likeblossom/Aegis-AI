@@ -84,6 +84,32 @@ export type ReportGenerationMetadata = {
   promptVersion: string;
 };
 
+export type GovernanceAgentFinding = {
+  agent: string;
+  riskLevel: (typeof RISK_LEVEL_VALUES)[number];
+  summary: string;
+  findings: string[];
+  evidence: string[];
+  recommendedControls: string[];
+  controlRationale: string;
+  confidence: (typeof CONFIDENCE_LEVEL_VALUES)[number];
+};
+
+export type GovernanceRoutingDecision = {
+  from: string;
+  to: string;
+  reason: string;
+};
+
+export type GovernanceWorkflowTrace = {
+  runId: string;
+  path: string[];
+  reviewerNodesExecuted: string[];
+  routingDecisions: GovernanceRoutingDecision[];
+  agentFindings: GovernanceAgentFinding[];
+  humanReviewRequired: boolean;
+};
+
 export type GovernanceReportObject = {
   executiveSummary: string;
   executiveBriefing: ExecutiveBriefing;
@@ -107,6 +133,7 @@ export type GovernanceReportObject = {
   assumptionsAndUncertainties: string[];
   simulatedGovernanceReviews: SimulatedGovernanceReview[];
   generationMetadata: ReportGenerationMetadata;
+  workflowTrace: GovernanceWorkflowTrace;
   riskLevel: (typeof RISK_LEVEL_VALUES)[number];
   aiReadinessScore: number;
   finalRecommendation: (typeof FINAL_RECOMMENDATION_VALUES)[number];
@@ -180,6 +207,43 @@ const generationMetadataSchema = z
     generationMode: "LOCAL_FALLBACK",
     fallbackUsed: true,
     promptVersion: "legacy-report"
+  });
+
+const governanceAgentFindingSchema = z.object({
+  agent: z.string(),
+  riskLevel: z.enum(RISK_LEVEL_VALUES),
+  summary: z.string().default("Council reviewer summary unavailable."),
+  findings: z.array(z.string()),
+  evidence: z.array(z.string()).default([]),
+  recommendedControls: z.array(z.string()),
+  controlRationale: z
+    .string()
+    .default("Control rationale was not captured for this finding."),
+  confidence: z.enum(CONFIDENCE_LEVEL_VALUES).default("LOW")
+});
+
+const governanceWorkflowTraceSchema = z
+  .object({
+    runId: z.string(),
+    path: z.array(z.string()),
+    reviewerNodesExecuted: z.array(z.string()).default([]),
+    routingDecisions: z.array(
+      z.object({
+        from: z.string(),
+        to: z.string(),
+        reason: z.string()
+      })
+    ),
+    agentFindings: z.array(governanceAgentFindingSchema),
+    humanReviewRequired: z.boolean()
+  })
+  .default({
+    runId: "legacy-report",
+    path: [],
+    reviewerNodesExecuted: [],
+    routingDecisions: [],
+    agentFindings: [],
+    humanReviewRequired: false
   });
 
 const executiveBriefingSchema = z
@@ -284,6 +348,7 @@ export const governanceReportSchema = z.object({
     })
   ),
   generationMetadata: generationMetadataSchema,
+  workflowTrace: governanceWorkflowTraceSchema,
   riskLevel: z.enum(RISK_LEVEL_VALUES),
   aiReadinessScore: z.number().int().min(0).max(100),
   finalRecommendation: z.enum(FINAL_RECOMMENDATION_VALUES),
