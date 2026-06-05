@@ -33,7 +33,25 @@ export function QueueFilters({
   reviewers
 }: QueueFiltersProps) {
   return (
-    <form className="rounded-lg border border-border bg-white p-4 shadow-sm">
+    <form className="app-panel p-4">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="section-eyebrow">Filters</p>
+          <h2 className="section-title mt-1">Narrow the queue</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-primary min-h-9 px-3 py-1.5" type="submit">
+            Apply filters
+          </button>
+          <a
+            className="btn btn-secondary min-h-9 px-3 py-1.5"
+            href="/"
+          >
+            Clear
+          </a>
+        </div>
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <FilterSelect label="Status" name="status" value={filters.status}>
           <option value="">All statuses</option>
@@ -85,21 +103,6 @@ export function QueueFilters({
           ))}
         </FilterSelect>
       </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          className="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          type="submit"
-        >
-          Apply filters
-        </button>
-        <a
-          className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-ink hover:bg-panel"
-          href="/"
-        >
-          Clear
-        </a>
-      </div>
     </form>
   );
 }
@@ -116,10 +119,10 @@ function FilterSelect({
   value: string;
 }) {
   return (
-    <label className="block text-sm font-medium text-ink">
+    <label className="field-label">
       <span>{label}</span>
       <select
-        className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+        className="field-control"
         defaultValue={value}
         name={name}
       >

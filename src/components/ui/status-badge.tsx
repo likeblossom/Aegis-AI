@@ -9,7 +9,7 @@ export function StatusBadge({ value }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${style}`}
+      className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${style}`}
     >
       {formatEnumLabel(value)}
     </span>
@@ -18,24 +18,24 @@ export function StatusBadge({ value }: StatusBadgeProps) {
 
 function getBadgeStyle(value: string) {
   if (value === "PENDING") {
-    return "border-sky-500 bg-sky-100 text-sky-950";
+    return "border-sky-300 bg-sky-50 text-sky-900";
   }
 
   if (["APPROVED", "LOW"].includes(value)) {
-    return "border-emerald-600 bg-emerald-100 text-emerald-950";
+    return "border-emerald-300 bg-emerald-50 text-emerald-900";
   }
 
   if (["APPROVED_WITH_CONTROLS", "MEDIUM"].includes(value)) {
-    return "border-yellow-500 bg-yellow-100 text-yellow-950";
+    return "border-amber-300 bg-amber-50 text-amber-950";
   }
 
   if (["NEEDS_REVIEW", "HIGH"].includes(value)) {
-    return "border-red-600 bg-red-100 text-red-950";
+    return "border-orange-300 bg-orange-50 text-orange-950";
   }
 
   if (["REJECTED", "CRITICAL"].includes(value)) {
-    return "border-red-700 bg-red-200 text-red-950";
+    return "border-red-300 bg-red-50 text-red-950";
   }
 
-  return "border-border bg-white text-ink";
+  return "border-line bg-white text-ink";
 }

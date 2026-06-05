@@ -51,6 +51,14 @@ export function DiscoveryInputForm() {
 
   return (
     <form className="space-y-5" onSubmit={runDiscovery}>
+      <div>
+        <p className="section-eyebrow">Discovery brief</p>
+        <h2 className="section-title mt-1">Define the operational problem</h2>
+        <p className="body-copy mt-1">
+          Keep the brief specific so opportunities can be ranked by practical
+          impact and governance risk.
+        </p>
+      </div>
       <div className="grid gap-5 md:grid-cols-2">
         <TextInput
           label="Department"
@@ -65,11 +73,13 @@ export function DiscoveryInputForm() {
       </div>
       <TextArea
         label="Business problem"
+        help="Describe the decision, workflow, or bottleneck the team wants to improve."
         value={input.businessProblem}
         onChange={(value) => updateInput("businessProblem", value)}
       />
       <TextArea
         label="Current pain points"
+        help="List the operational problems reviewers should understand first."
         value={input.currentPainPoints}
         onChange={(value) => updateInput("currentPainPoints", value)}
       />
@@ -83,7 +93,7 @@ export function DiscoveryInputForm() {
       {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
 
       <button
-        className="rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn btn-primary"
         disabled={isDiscovering}
         type="submit"
       >
@@ -103,10 +113,10 @@ function TextInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block text-sm font-medium text-ink">
+    <label className="field-label">
       <span>{label}</span>
       <input
-        className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+        className="field-control"
         required
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -116,25 +126,28 @@ function TextInput({
 }
 
 function TextArea({
+  help,
   label,
   value,
   required = true,
   onChange
 }: {
+  help?: string;
   label: string;
   value: string;
   required?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block text-sm font-medium text-ink">
+    <label className="field-label">
       <span>{label}</span>
       <textarea
-        className="mt-2 min-h-28 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+        className="field-control min-h-32"
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
+      {help ? <span className="field-help">{help}</span> : null}
     </label>
   );
 }

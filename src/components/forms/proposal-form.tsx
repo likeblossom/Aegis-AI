@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import {
   DATA_SENSITIVITY_VALUES,
@@ -61,72 +61,99 @@ export function ProposalForm() {
 
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
-      <div className="grid gap-5 md:grid-cols-2">
-        <TextInput
-          label="Title"
-          value={form.title}
-          onChange={(value) => updateField("title", value)}
-        />
-        <TextInput
-          label="Department"
-          value={form.department}
-          onChange={(value) => updateField("department", value)}
-        />
-        <TextInput
-          label="Team owner"
-          value={form.teamOwner}
-          onChange={(value) => updateField("teamOwner", value)}
-        />
-        <TextInput
-          label="Implementation timeline"
-          value={form.implementationTimeline}
-          onChange={(value) => updateField("implementationTimeline", value)}
-        />
-        <SelectInput
-          label="Data sensitivity"
-          value={form.dataSensitivity}
-          values={DATA_SENSITIVITY_VALUES}
-          onChange={(value) => updateField("dataSensitivity", value)}
-        />
-        <SelectInput
-          label="Decision impact"
-          value={form.decisionImpact}
-          values={DECISION_IMPACT_VALUES}
-          onChange={(value) => updateField("decisionImpact", value)}
-        />
-        <SelectInput
-          label="Human oversight planned"
-          value={form.humanOversightPlanned}
-          values={HUMAN_OVERSIGHT_VALUES}
-          onChange={(value) => updateField("humanOversightPlanned", value)}
-        />
-      </div>
+      <FormSection
+        eyebrow="Ownership"
+        title="Who owns this use case?"
+        description="Use clear business ownership so reviewers can route questions without hunting through the proposal."
+      >
+        <div className="grid gap-5 md:grid-cols-2">
+          <TextInput
+            help="Use the business-facing name reviewers will recognize."
+            label="Title"
+            value={form.title}
+            onChange={(value) => updateField("title", value)}
+          />
+          <TextInput
+            label="Department"
+            value={form.department}
+            onChange={(value) => updateField("department", value)}
+          />
+          <TextInput
+            label="Team owner"
+            value={form.teamOwner}
+            onChange={(value) => updateField("teamOwner", value)}
+          />
+          <TextInput
+            help="Example: pilot in Q3, production by year end."
+            label="Implementation timeline"
+            value={form.implementationTimeline}
+            onChange={(value) => updateField("implementationTimeline", value)}
+          />
+        </div>
+      </FormSection>
 
-      <TextArea
-        label="Current process"
-        value={form.currentProcess}
-        onChange={(value) => updateField("currentProcess", value)}
-      />
-      <TextArea
-        label="Proposed AI solution"
-        value={form.proposedSolution}
-        onChange={(value) => updateField("proposedSolution", value)}
-      />
-      <TextArea
-        label="Expected benefit"
-        value={form.expectedBenefit}
-        onChange={(value) => updateField("expectedBenefit", value)}
-      />
-      <TextArea
-        label="Affected stakeholders"
-        value={form.affectedStakeholders}
-        onChange={(value) => updateField("affectedStakeholders", value)}
-      />
+      <FormSection
+        eyebrow="Operating context"
+        title="Describe the current process and proposed change"
+        description="Short, concrete descriptions make the generated governance report easier to validate."
+      >
+        <div className="grid gap-5">
+          <TextArea
+            label="Current process"
+            value={form.currentProcess}
+            onChange={(value) => updateField("currentProcess", value)}
+          />
+          <TextArea
+            label="Proposed AI solution"
+            value={form.proposedSolution}
+            onChange={(value) => updateField("proposedSolution", value)}
+          />
+          <TextArea
+            label="Expected benefit"
+            value={form.expectedBenefit}
+            onChange={(value) => updateField("expectedBenefit", value)}
+          />
+        </div>
+      </FormSection>
+
+      <FormSection
+        eyebrow="Governance inputs"
+        title="Classify the risk signals"
+        description="These fields determine how much scrutiny the initial governance workflow should apply."
+      >
+        <div className="grid gap-5 md:grid-cols-3">
+          <SelectInput
+            label="Data sensitivity"
+            value={form.dataSensitivity}
+            values={DATA_SENSITIVITY_VALUES}
+            onChange={(value) => updateField("dataSensitivity", value)}
+          />
+          <SelectInput
+            label="Decision impact"
+            value={form.decisionImpact}
+            values={DECISION_IMPACT_VALUES}
+            onChange={(value) => updateField("decisionImpact", value)}
+          />
+          <SelectInput
+            label="Human oversight planned"
+            value={form.humanOversightPlanned}
+            values={HUMAN_OVERSIGHT_VALUES}
+            onChange={(value) => updateField("humanOversightPlanned", value)}
+          />
+        </div>
+        <div className="mt-5">
+          <TextArea
+            label="Affected stakeholders"
+            value={form.affectedStakeholders}
+            onChange={(value) => updateField("affectedStakeholders", value)}
+          />
+        </div>
+      </FormSection>
 
       {error ? <p className="text-sm font-medium text-red-700">{error}</p> : null}
 
       <button
-        className="rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn btn-primary"
         disabled={isSubmitting}
         type="submit"
       >
@@ -136,24 +163,50 @@ export function ProposalForm() {
   );
 }
 
+function FormSection({
+  children,
+  description,
+  eyebrow,
+  title
+}: {
+  children: ReactNode;
+  description: string;
+  eyebrow: string;
+  title: string;
+}) {
+  return (
+    <section className="border-b border-line pb-6 last:border-b-0 last:pb-0">
+      <div className="mb-4">
+        <p className="section-eyebrow">{eyebrow}</p>
+        <h2 className="section-title mt-1">{title}</h2>
+        <p className="body-copy mt-1">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function TextInput({
+  help,
   label,
   value,
   onChange
 }: {
+  help?: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block text-sm font-medium text-ink">
+    <label className="field-label">
       <span>{label}</span>
       <input
-        className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+        className="field-control"
         required
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
+      {help ? <span className="field-help">{help}</span> : null}
     </label>
   );
 }
@@ -168,10 +221,10 @@ function TextArea({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block text-sm font-medium text-ink">
+    <label className="field-label">
       <span>{label}</span>
       <textarea
-        className="mt-2 min-h-28 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+        className="field-control min-h-32"
         required
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -192,10 +245,10 @@ function SelectInput<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <label className="block text-sm font-medium text-ink">
+    <label className="field-label">
       <span>{label}</span>
       <select
-        className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+        className="field-control"
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
       >

@@ -57,31 +57,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <PageShell maxWidth="wide">
-      <section className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+      <section className="mb-6 flex flex-col gap-5 border-b border-line pb-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-normal text-ink">
-            Aegis-AI
+          <p className="section-eyebrow">Review queue</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-normal text-ink">
+            AI use-case governance
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            AI Governance & Use-Case Evaluation Platform for collecting proposed
-            AI initiatives and tracking review status.
+          <p className="body-copy mt-2">
+            Triage proposed AI initiatives, monitor reviewer ownership, and
+            keep high-risk recommendations visible.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Link
-            className="inline-flex w-fit rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-panel"
+            className="btn btn-secondary"
             href="/discovery"
           >
             Discover opportunities
           </Link>
           <Link
-            className="inline-flex w-fit rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-panel"
+            className="btn btn-secondary"
             href="/portfolio"
           >
             Portfolio priorities
           </Link>
           <Link
-            className="inline-flex w-fit rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+            className="btn btn-primary"
             href="/use-cases/new"
           >
             New proposal
@@ -96,8 +97,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           filters={filters}
           reviewers={reviewers}
         />
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-ink">Review queue</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+          <div>
+            <p className="section-eyebrow">Active work</p>
+            <h2 className="section-title mt-1">Review queue</h2>
+          </div>
           <p className="text-sm text-muted">
             Showing {filteredItems.length} of {queueItems.length}
           </p>

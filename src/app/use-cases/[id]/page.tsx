@@ -121,22 +121,22 @@ export default async function UseCaseDetailPage({
     <PageShell>
       <div className="mb-6 space-y-5">
         <BackLink />
-        <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
+        <section className="app-panel p-5 sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge value={proposal.status} />
-                <span className="rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-muted">
+                <span className="rounded-full border border-line bg-panel px-2.5 py-1 text-xs font-medium text-muted">
                   {proposal.department}
                 </span>
-                <span className="rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-muted">
+                <span className="rounded-full border border-line bg-panel px-2.5 py-1 text-xs font-medium text-muted">
                   ID {proposal.id}
                 </span>
               </div>
-              <h1 className="mt-4 text-2xl font-semibold tracking-normal text-ink sm:text-3xl">
+              <h1 className="mt-4 text-3xl font-semibold tracking-normal text-ink">
                 {proposal.title}
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
+              <p className="body-copy mt-3">
                 {proposal.proposedSolution}
               </p>
             </div>
@@ -180,13 +180,13 @@ export default async function UseCaseDetailPage({
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <div className="space-y-6">
-          <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
+          <section className="app-panel p-5 sm:p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                <p className="section-eyebrow">
                   Intake summary
                 </p>
-                <h2 className="mt-1 text-lg font-semibold text-ink">
+                <h2 className="section-title mt-1">
                   Proposal details
                 </h2>
               </div>
@@ -282,12 +282,12 @@ export default async function UseCaseDetailPage({
             useCaseId={proposal.id}
           />
 
-          <section className="rounded-lg border border-border bg-white p-5 shadow-sm">
+          <section className="app-panel p-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              <p className="section-eyebrow">
                 Activity
               </p>
-              <h2 className="mt-1 text-lg font-semibold text-ink">Audit log</h2>
+              <h2 className="section-title mt-1">Audit log</h2>
             </div>
             <ol className="mt-4 space-y-4">
               {logs.map((log) => (
@@ -317,10 +317,8 @@ export default async function UseCaseDetailPage({
 
 function SummaryTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-border bg-panel px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </p>
+    <div className="border border-line bg-panel px-4 py-3">
+      <p className="section-eyebrow">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold text-ink">{value}</p>
     </div>
   );
@@ -328,10 +326,8 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
 
 function MetricPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-white px-4 py-3 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </p>
+    <div className="metric-tile">
+      <p className="section-eyebrow">{label}</p>
       <p className="mt-1 text-sm font-semibold leading-6 text-ink">{value}</p>
     </div>
   );
@@ -365,13 +361,11 @@ function DetailItem({
     <div
       className={
         prominent
-          ? "rounded-md border border-border bg-panel p-4 sm:col-span-2"
-          : "rounded-md border border-border bg-panel p-4"
+          ? "border border-line bg-panel p-4 sm:col-span-2"
+          : "border border-line bg-panel p-4"
       }
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </p>
+      <p className="section-eyebrow">{label}</p>
       <p className="mt-1 text-sm leading-6 text-ink">{value}</p>
     </div>
   );

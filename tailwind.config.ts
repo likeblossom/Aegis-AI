@@ -6,9 +6,13 @@ const config: Config = {
     extend: {
       colors: {
         border: "#d8dee8",
+        canvas: "#f3f5f8",
         ink: "#172033",
+        line: "#d6dce6",
         muted: "#64748b",
-        panel: "#f7f9fc"
+        panel: "#f7f9fc",
+        surface: "#ffffff",
+        "surface-muted": "#eef2f6"
       }
     }
   },

@@ -23,10 +23,8 @@ export function RiskBreakdown({
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map(([label, value]) => (
-        <div key={label} className="rounded-md border border-border bg-panel p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {label}
-          </p>
+        <div key={label} className="border border-line bg-panel p-4">
+          <p className="section-eyebrow">{label}</p>
           <p className="mt-2 text-lg font-semibold text-ink">{value}</p>
         </div>
       ))}

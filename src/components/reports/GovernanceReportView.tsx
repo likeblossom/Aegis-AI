@@ -29,9 +29,9 @@ export function GovernanceReportView({
 }: GovernanceReportViewProps) {
   if (!report) {
     return (
-      <section className="rounded-lg border border-dashed border-border bg-white p-5 shadow-sm sm:p-6">
-        <h2 className="text-lg font-semibold text-ink">Governance analysis</h2>
-        <p className="mt-3 text-sm leading-6 text-muted">
+      <section className="app-panel border-dashed p-5 sm:p-6">
+        <h2 className="section-title">Governance analysis</h2>
+        <p className="body-copy mt-3">
           No governance report has been generated yet.
         </p>
       </section>
@@ -39,10 +39,11 @@ export function GovernanceReportView({
   }
 
   return (
-    <section className="rounded-lg border border-border bg-white p-5 shadow-sm sm:p-6">
+    <section className="app-panel p-5 sm:p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-ink">Governance analysis</h2>
+          <p className="section-eyebrow">Generated assessment</p>
+          <h2 className="section-title mt-1">Governance analysis</h2>
           {reportRecord ? (
             <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted">
               {reportLabel} - Version {reportRecord.reportVersion} -{" "}
@@ -54,12 +55,12 @@ export function GovernanceReportView({
           {["deterministic", "LOCAL_FALLBACK"].includes(
             reportRecord?.generationProvider ?? ""
           ) ? (
-            <p className="mt-2 rounded-md border border-border bg-panel px-3 py-2 text-xs leading-5 text-muted">
+            <p className="mt-2 border border-line bg-panel px-3 py-2 text-xs leading-5 text-muted">
               This report was generated using local fallback analysis.
             </p>
           ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="w-fit rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium text-ink">
+            <span className="w-fit rounded-full border border-line bg-panel px-2.5 py-1 text-xs font-medium text-ink">
               {report.generationMetadata.fallbackUsed
                 ? "Generated with Local Fallback"
                 : "Generated with Azure OpenAI"}
@@ -80,13 +81,13 @@ export function GovernanceReportView({
               ? ` - ${report.generationMetadata.modelDeployment}`
               : ""}
           </p>
-          <p className="mt-2 text-sm leading-6 text-muted">
+          <p className="body-copy mt-3">
             {report.executiveSummary}
           </p>
         </div>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-5 border-t border-line pt-5">
         <ExecutiveBriefing briefing={report.executiveBriefing} />
       </div>
 
@@ -107,9 +108,9 @@ export function GovernanceReportView({
         />
       </div>
 
-      <div className="mt-6 grid gap-6">
+      <div className="mt-6 grid gap-6 border-t border-line pt-6">
         <section>
-          <h3 className="text-base font-semibold text-ink">
+          <h3 className="section-title">
             Use-case classification
           </h3>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -132,20 +133,20 @@ export function GovernanceReportView({
           </dl>
         </section>
 
-        <section>
-          <h3 className="text-base font-semibold text-ink">
+        <section className="max-w-3xl">
+          <h3 className="section-title">
             Governance risk analysis
           </h3>
-          <p className="mt-2 text-sm leading-6 text-muted">
+          <p className="mt-2 text-sm leading-7 text-muted">
             {report.governanceRiskAnalysis}
           </p>
         </section>
 
-        <section>
-          <h3 className="text-base font-semibold text-ink">
+        <section className="max-w-3xl">
+          <h3 className="section-title">
             Business impact analysis
           </h3>
-          <p className="mt-2 text-sm leading-6 text-muted">
+          <p className="mt-2 text-sm leading-7 text-muted">
             {report.businessImpactAnalysis}
           </p>
         </section>
@@ -154,9 +155,9 @@ export function GovernanceReportView({
 
         <AssessmentBreakdown assessment={report.assessmentBreakdown} />
 
-        <section>
-          <h3 className="text-base font-semibold text-ink">Required controls</h3>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-muted">
+        <section className="max-w-3xl">
+          <h3 className="section-title">Required controls</h3>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-7 text-muted">
             {report.requiredControls.map((control) => (
               <li key={control}>{control}</li>
             ))}
@@ -183,10 +184,10 @@ function WorkflowTracePanel({ report }: { report: GovernanceReportObject }) {
   const hasTrace = trace.path.length > 0 && trace.runId !== "legacy-report";
 
   return (
-    <section className="rounded-md border border-border bg-panel p-4">
+    <section className="border border-line bg-panel p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-base font-semibold text-ink">Workflow trace</h3>
+          <h3 className="section-title">Workflow trace</h3>
           <p className="mt-1 text-sm leading-6 text-muted">
             {hasTrace
               ? "Governance council review generated reviewer findings, evidence, and controls for this proposal."
@@ -222,7 +223,7 @@ function CouncilFindings({
 
   return (
     <section className={variant === "embedded" ? "mt-5" : ""}>
-      <h3 className="text-base font-semibold text-ink">
+      <h3 className="section-title">
         Council findings
       </h3>
       {findings.length === 0 ? (
@@ -235,8 +236,8 @@ function CouncilFindings({
             <div
               className={
                 variant === "embedded"
-                  ? "rounded-md border border-border bg-white p-4"
-                  : "rounded-md border border-border bg-panel p-4"
+                  ? "border border-line bg-white p-4"
+                  : "border border-line bg-panel p-4"
               }
               key={finding.agent}
             >
@@ -258,10 +259,8 @@ function CouncilFindings({
                 ))}
               </ul>
               {finding.evidence.length > 0 ? (
-                <div className="mt-3 rounded-md border border-border bg-white px-3 py-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Evidence reviewed
-                  </p>
+                <div className="mt-3 border border-line bg-white px-3 py-2">
+                  <p className="section-eyebrow">Evidence reviewed</p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted">
                     {finding.evidence.map((item) => (
                       <li key={item}>{item}</li>
@@ -270,9 +269,7 @@ function CouncilFindings({
                 </div>
               ) : null}
               <div className="mt-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Recommended controls
-                </p>
+                <p className="section-eyebrow">Recommended controls</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted">
                   {finding.recommendedControls.map((control) => (
                     <li key={control}>{control}</li>
@@ -299,18 +296,16 @@ function formatTraceLabel(value: string) {
 
 function getReviewRequirementBadgeStyle(humanReviewRequired: boolean) {
   if (humanReviewRequired) {
-    return "border-orange-500 bg-orange-100 text-orange-950";
+    return "border-orange-300 bg-orange-50 text-orange-950";
   }
 
-  return "border-emerald-600 bg-emerald-100 text-emerald-950";
+  return "border-emerald-300 bg-emerald-50 text-emerald-950";
 }
 
 function ClassItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-border bg-panel p-3">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </dt>
+    <div className="border border-line bg-panel p-3">
+      <dt className="section-eyebrow">{label}</dt>
       <dd className="mt-1 text-sm text-ink">{value}</dd>
     </div>
   );
