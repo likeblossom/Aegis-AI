@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import type { ReviewerNote } from "@/db/schema";
-import { formatEnumLabel } from "@/lib/constants";
+import { REVIEWER_VALUES, formatEnumLabel } from "@/lib/constants";
 
 type ReviewerNotesListProps = {
   notes: ReviewerNote[];
@@ -16,6 +16,7 @@ export function ReviewerNotesList({ notes, useCaseId }: ReviewerNotesListProps) 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [noteText, setNoteText] = useState("");
   const [reviewerName, setReviewerName] = useState("");
+  const [reviewerAccessCode, setReviewerAccessCode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +24,7 @@ export function ReviewerNotesList({ notes, useCaseId }: ReviewerNotesListProps) 
     setEditingId(note.id);
     setNoteText(note.note);
     setReviewerName(note.reviewerName);
+    setReviewerAccessCode("");
     setError(null);
   }
 
@@ -30,6 +32,7 @@ export function ReviewerNotesList({ notes, useCaseId }: ReviewerNotesListProps) 
     setEditingId(null);
     setNoteText("");
     setReviewerName("");
+    setReviewerAccessCode("");
     setError(null);
   }
 
@@ -48,14 +51,17 @@ export function ReviewerNotesList({ notes, useCaseId }: ReviewerNotesListProps) 
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: noteText, reviewerName })
+        body: JSON.stringify({ note: noteText, reviewerName, reviewerAccessCode })
       }
     );
 
     setIsSaving(false);
 
     if (!response.ok) {
-      setError("Could not update the reviewer note.");
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(body?.error ?? "Could not update the reviewer note.");
       return;
     }
 
@@ -77,11 +83,26 @@ export function ReviewerNotesList({ notes, useCaseId }: ReviewerNotesListProps) 
               {editingId === note.id ? (
                 <form className="space-y-3" onSubmit={updateNote}>
                   <label className="block text-sm font-medium text-ink">
-                    <span>Reviewer name</span>
-                    <input
+                    <span>Reviewer</span>
+                    <select
                       className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
                       value={reviewerName}
                       onChange={(event) => setReviewerName(event.target.value)}
+                    >
+                      {REVIEWER_VALUES.map((reviewer) => (
+                        <option key={reviewer} value={reviewer}>
+                          {reviewer}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-ink">
+                    <span>Reviewer access code</span>
+                    <input
+                      className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                      type="password"
+                      value={reviewerAccessCode}
+                      onChange={(event) => setReviewerAccessCode(event.target.value)}
                     />
                   </label>
                   <label className="block text-sm font-medium text-ink">

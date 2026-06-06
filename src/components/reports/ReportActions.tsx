@@ -4,17 +4,19 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { formatGenerationFailureReason } from "@/lib/audit-log-formatter";
-import { REVIEW_STATUS_VALUES, formatEnumLabel } from "@/lib/constants";
+import { REVIEWER_VALUES, REVIEW_STATUS_VALUES, formatEnumLabel } from "@/lib/constants";
 import type { ReviewStatus } from "@/lib/validations";
 
 type ReportActionsProps = {
   useCaseId: number;
+  assignedReviewer: string;
   currentStatus: string;
   hasReport: boolean;
 };
 
 export function ReportActions({
   useCaseId,
+  assignedReviewer,
   currentStatus,
   hasReport
 }: ReportActionsProps) {
@@ -25,7 +27,12 @@ export function ReportActions({
     currentStatus === "PENDING" ? "NEEDS_REVIEW" : (currentStatus as ReviewStatus)
   );
   const [note, setNote] = useState("");
-  const [reviewerName, setReviewerName] = useState("Governance reviewer");
+  const [reviewerName, setReviewerName] = useState(
+    REVIEWER_VALUES.includes(assignedReviewer as (typeof REVIEWER_VALUES)[number])
+      ? assignedReviewer
+      : "Governance reviewer"
+  );
+  const [reviewerAccessCode, setReviewerAccessCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [generationNotice, setGenerationNotice] = useState<string | null>(null);
 
@@ -35,7 +42,9 @@ export function ReportActions({
     setIsGenerating(true);
 
     const response = await fetch(`/api/use-cases/${useCaseId}/generate-report`, {
-      method: "POST"
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewerAccessCode })
     });
 
     setIsGenerating(false);
@@ -74,13 +83,16 @@ export function ReportActions({
     const response = await fetch(`/api/use-cases/${useCaseId}/review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, note, reviewerName })
+      body: JSON.stringify({ status, note, reviewerName, reviewerAccessCode })
     });
 
     setIsReviewing(false);
 
     if (!response.ok) {
-      setError("Could not update the review status.");
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(body?.error ?? "Could not update the review status.");
       return;
     }
 
@@ -117,6 +129,29 @@ export function ReportActions({
 
         <form className="space-y-3" onSubmit={updateReviewStatus}>
           <label className="block text-sm font-medium text-ink">
+            <span>Reviewer</span>
+            <select
+              className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
+              value={reviewerName}
+              onChange={(event) => setReviewerName(event.target.value)}
+            >
+              {REVIEWER_VALUES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-ink">
+            <span>Reviewer access code</span>
+            <input
+              className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
+              type="password"
+              value={reviewerAccessCode}
+              onChange={(event) => setReviewerAccessCode(event.target.value)}
+            />
+          </label>
+          <label className="block text-sm font-medium text-ink">
             <span>Reviewer decision</span>
             <select
               className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
@@ -129,14 +164,6 @@ export function ReportActions({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="block text-sm font-medium text-ink">
-            <span>Reviewer name</span>
-            <input
-              className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
-              value={reviewerName}
-              onChange={(event) => setReviewerName(event.target.value)}
-            />
           </label>
           <label className="block text-sm font-medium text-ink">
             <span>Review note</span>

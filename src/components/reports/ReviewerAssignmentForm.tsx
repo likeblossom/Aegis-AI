@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { ASSIGNABLE_REVIEWER_VALUES } from "@/lib/constants";
 
 type ReviewerAssignmentFormProps = {
   assignedReviewer: string;
@@ -18,11 +19,17 @@ export function ReviewerAssignmentForm({
   useCaseId
 }: ReviewerAssignmentFormProps) {
   const router = useRouter();
-  const [value, setValue] = useState(assignedReviewer);
+  const normalizedAssignedReviewer = ASSIGNABLE_REVIEWER_VALUES.includes(
+    assignedReviewer as (typeof ASSIGNABLE_REVIEWER_VALUES)[number]
+  )
+    ? assignedReviewer
+    : "Unassigned";
+  const [value, setValue] = useState(normalizedAssignedReviewer);
+  const [reviewerAccessCode, setReviewerAccessCode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
-  const hasChanged = value.trim() !== assignedReviewer;
+  const hasChanged = value !== assignedReviewer;
 
   async function updateAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,13 +40,16 @@ export function ReviewerAssignmentForm({
     const response = await fetch(`/api/use-cases/${useCaseId}/assignment`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assignedReviewer: value })
+      body: JSON.stringify({ assignedReviewer: value, reviewerAccessCode })
     });
 
     setIsSaving(false);
 
     if (!response.ok) {
-      setError("Could not update the assigned reviewer.");
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(body?.error ?? "Could not update the assigned reviewer.");
       return;
     }
 
@@ -60,10 +70,25 @@ export function ReviewerAssignmentForm({
       <form className="mt-4 space-y-3" onSubmit={updateAssignment}>
         <label className="block text-sm font-medium text-ink">
           <span>Assigned reviewer</span>
-          <input
+          <select
             className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
             value={value}
             onChange={(event) => setValue(event.target.value)}
+          >
+            {ASSIGNABLE_REVIEWER_VALUES.map((reviewer) => (
+              <option key={reviewer} value={reviewer}>
+                {reviewer}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-medium text-ink">
+          <span>Reviewer access code</span>
+          <input
+            className="mt-2 w-full rounded-md border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-slate-500"
+            type="password"
+            value={reviewerAccessCode}
+            onChange={(event) => setReviewerAccessCode(event.target.value)}
           />
         </label>
         <div className="grid gap-2 sm:grid-cols-2">

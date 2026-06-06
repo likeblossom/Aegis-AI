@@ -5,6 +5,8 @@ import {
   DECISION_IMPACT_VALUES,
   FINAL_RECOMMENDATION_VALUES,
   HUMAN_OVERSIGHT_VALUES,
+  ASSIGNABLE_REVIEWER_VALUES,
+  REVIEWER_VALUES,
   REVIEW_STATUS_VALUES,
   RISK_LEVEL_VALUES,
   USE_CASE_STATUS_VALUES
@@ -22,29 +24,23 @@ export const finalRecommendationSchema = z.enum(FINAL_RECOMMENDATION_VALUES);
 export const reviewUpdateSchema = z.object({
   status: reviewStatusSchema,
   note: z.string().trim().max(2000).optional().default(""),
-  reviewerName: z
-    .string()
-    .trim()
-    .max(120)
-    .optional()
-    .default("Governance reviewer")
+  reviewerName: z.enum(REVIEWER_VALUES).default("Governance reviewer"),
+  reviewerAccessCode: z.string().trim().min(1, "Reviewer access code is required")
 });
 
 export const assignmentUpdateSchema = z.object({
-  assignedReviewer: z
-    .string()
-    .trim()
-    .min(1, "Assigned reviewer is required")
-    .max(120)
+  assignedReviewer: z.enum(ASSIGNABLE_REVIEWER_VALUES),
+  reviewerAccessCode: z.string().trim().min(1, "Reviewer access code is required")
 });
 
 export const reviewerNoteUpdateSchema = z.object({
   note: z.string().trim().min(1, "Reviewer note is required").max(2000),
-  reviewerName: z
-    .string()
-    .trim()
-    .min(1, "Reviewer name is required")
-    .max(120)
+  reviewerName: z.enum(REVIEWER_VALUES),
+  reviewerAccessCode: z.string().trim().min(1, "Reviewer access code is required")
+});
+
+export const reportGenerationRequestSchema = z.object({
+  reviewerAccessCode: z.string().trim().min(1, "Reviewer access code is required")
 });
 
 export const createUseCaseSchema = z.object({

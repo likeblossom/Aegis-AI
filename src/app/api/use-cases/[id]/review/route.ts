@@ -8,6 +8,7 @@ import {
 } from "@/lib/audit-log-formatter";
 import { reviewUpdateSchema } from "@/lib/validations";
 import { validateReviewWorkflow } from "@/server/governance/workflowControls";
+import { validateReviewerAccessCode } from "@/server/reviewerAuth";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,12 @@ export async function POST(request: Request, context: RouteContext) {
       { error: "Invalid review update", issues: parsed.error.flatten() },
       { status: 400 }
     );
+  }
+
+  const authResult = validateReviewerAccessCode(parsed.data.reviewerAccessCode);
+
+  if (!authResult.ok) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   const proposal = db
@@ -90,7 +97,7 @@ export async function POST(request: Request, context: RouteContext) {
         useCaseId: numericId,
         status: parsed.data.status,
         note: parsed.data.note,
-        reviewerName: parsed.data.reviewerName || "Governance reviewer"
+        reviewerName: parsed.data.reviewerName
       })
       .run();
 

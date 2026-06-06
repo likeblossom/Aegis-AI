@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auditLogs, useCases } from "@/db/schema";
 import { buildReviewerAssignedAuditNote } from "@/lib/audit-log-formatter";
 import { assignmentUpdateSchema } from "@/lib/validations";
+import { validateReviewerAccessCode } from "@/server/reviewerAuth";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       { error: "Invalid reviewer assignment", issues: parsed.error.flatten() },
       { status: 400 }
     );
+  }
+
+  const authResult = validateReviewerAccessCode(parsed.data.reviewerAccessCode);
+
+  if (!authResult.ok) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   const proposal = db

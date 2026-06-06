@@ -24,6 +24,22 @@ export const REVIEW_STATUS_VALUES = [
   "REJECTED"
 ] as const;
 
+export const REVIEWER_VALUES = [
+  "Governance reviewer",
+  "IT Governance",
+  "Operations Governance",
+  "HR Governance",
+  "HR Compliance",
+  "Privacy Office",
+  "Legal and Procurement Risk",
+  "Supply Chain Compliance"
+] as const;
+
+export const ASSIGNABLE_REVIEWER_VALUES = [
+  "Unassigned",
+  ...REVIEWER_VALUES
+] as const;
+
 export const RISK_LEVEL_VALUES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 
 export const CONFIDENCE_LEVEL_VALUES = ["LOW", "MEDIUM", "HIGH"] as const;

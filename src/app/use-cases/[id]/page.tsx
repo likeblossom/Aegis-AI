@@ -269,6 +269,7 @@ export default async function UseCaseDetailPage({
           />
 
           <ReportActions
+            assignedReviewer={proposal.assignedReviewer}
             currentStatus={proposal.status}
             hasReport={Boolean(latestReportRecord)}
             useCaseId={proposal.id}

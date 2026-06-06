@@ -2,7 +2,9 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { useCases } from "@/db/schema";
+import { reportGenerationRequestSchema } from "@/lib/validations";
 import { generateGovernanceReportWithWorkflow } from "@/server/governance/generateGovernanceReportWorkflow";
+import { validateReviewerAccessCode } from "@/server/reviewerAuth";
 
 export const runtime = "nodejs";
 
@@ -10,12 +12,28 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const numericId = Number(id);
 
   if (!Number.isInteger(numericId)) {
     return NextResponse.json({ error: "Invalid use case id" }, { status: 400 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = reportGenerationRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid report generation request", issues: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const authResult = validateReviewerAccessCode(parsed.data.reviewerAccessCode);
+
+  if (!authResult.ok) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   const proposal = db

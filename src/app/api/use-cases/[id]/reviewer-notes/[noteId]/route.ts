@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auditLogs, reviewerNotes } from "@/db/schema";
 import { buildReviewNoteUpdatedAuditNote } from "@/lib/audit-log-formatter";
 import { reviewerNoteUpdateSchema } from "@/lib/validations";
+import { validateReviewerAccessCode } from "@/server/reviewerAuth";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       { error: "Invalid reviewer note update", issues: parsed.error.flatten() },
       { status: 400 }
     );
+  }
+
+  const authResult = validateReviewerAccessCode(parsed.data.reviewerAccessCode);
+
+  if (!authResult.ok) {
+    return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   const existing = db
